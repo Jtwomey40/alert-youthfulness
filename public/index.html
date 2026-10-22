@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zoodealio Dashboard</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>Zoodealio <span>Dashboard</span></h1>
+</header>
+<nav>
+  <button data-section="overview" class="active">Overview</button>
+  <button data-section="tasks">Tasks</button>
+  <button data-section="properties">Properties</button>
+</nav>
+<main>
+
+  <section id="overview" class="section active">
+    <div class="panel">
+      <h2>Due Today &amp; Overdue</h2>
+      <table id="overview-tasks-table">
+        <thead><tr><th>Title</th><th>Priority</th><th>Due</th><th>Project</th><th>Status</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <h2>Deal Pipeline</h2>
+      <div class="board" id="overview-pipeline-board"></div>
+    </div>
+  </section>
+
+  <section id="tasks" class="section">
+    <div class="panel">
+      <div class="view-toggle">
+        <button data-view="table" class="active">Table</button>
+        <button data-view="board">Board</button>
+      </div>
+      <div id="tasks-table-view">
+        <table id="tasks-table">
+          <thead><tr><th>Title</th><th>Status</th><th>Priority</th><th>Due</th><th>Project</th><th>Source</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div id="tasks-board-view" class="board" style="display:none;"></div>
+    </div>
+  </section>
+
+  <section id="properties" class="section">
+    <div class="panel">
+      <div class="view-toggle">
+        <button data-view="table" class="active">Table</button>
+        <button data-view="board">Board</button>
+      </div>
+      <div id="properties-table-view">
+        <table id="properties-table">
+          <thead><tr><th>Address</th><th>Stage</th><th>Agent</th><th>Deal</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div id="properties-board-view" class="board" style="display:none;"></div>
+    </div>
+  </section>
+
+</main>
+<script src="app.js"></script>
+</body>
+</html>

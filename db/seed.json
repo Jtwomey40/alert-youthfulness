@@ -1,0 +1,38 @@
+{
+  "properties": [
+    {"address": "3705 Havasu Falls Street Northeast, Rio Rancho, NM 87144", "stage": "Offers ready", "deal_url": "https://dealiodesk.ai/property-transactions/1e31b331-cb4e-4e8a-a1af-2e2edf2cd173", "agent_name": "Regina McKinney", "agent_email": "regina@reginamckinney.com", "agent_phone": "5055004370", "legacy_key": "prop_3705havasufalls"},
+    {"address": "12970 Spring Rain Road, Jacksonville, FL", "stage": "Offers ready", "deal_url": "https://dealiodesk.ai/property-transactions/e906e6ec-3466-4bb7-86d7-cdaa024bdb2a", "agent_name": "Ryan Miller", "agent_email": "ryan@zorirealty.com", "agent_phone": "3525753399", "legacy_key": "prop_12970springrain"},
+    {"address": "465 Campbell Ridge Place, Wendell, NC", "stage": "Offers ready", "deal_url": "https://dealiodesk.ai/property-transactions/345824af-57c6-4368-a7b6-a12525b9cfa7", "agent_name": "coralie noel", "agent_email": "coralie@landhuisresidential.com", "agent_phone": "9194204175", "legacy_key": "prop_465campbellridge"},
+    {"address": "41511 North Palm Springs Trail, San Tan Valley, AZ 85140", "stage": "Intake", "deal_url": "https://dealiodesk.ai/property-transactions/e04f88b6-cd07-4670-8ba3-b421b5c23740", "agent_name": "", "agent_email": "", "agent_phone": "", "legacy_key": "prop_41511npalmsprings"},
+    {"address": "649 58th Street, West Palm Beach, FL 33407", "stage": "Offers ready", "deal_url": "https://dealiodesk.ai/property-transactions/4190f1d4-bad4-4710-82cf-30cede2984bc", "agent_name": "Marjorie Mendez", "agent_email": "mcmendezrealtor@gmail.com", "agent_phone": "5614524443", "legacy_key": "prop_64958thst"},
+    {"address": "10657 Coach House Lane, Frisco, TX 75035", "stage": "Offers ready", "deal_url": "https://dealiodesk.ai/property-transactions/5b8bf375-dc11-4702-9b69-c30527ce31d0", "agent_name": "Steven Thomas", "agent_email": "sjt@refindrealty.com", "agent_phone": "", "legacy_key": "prop_10657coachhouse"},
+    {"address": "302 Cedar Street, Lancaster, SC 29720", "stage": "Offers ready", "deal_url": "https://dealiodesk.ai/property-transactions/6a856bcd-34c9-4b6a-847d-86113fc4e218", "agent_name": "Alexis Johnson", "agent_email": "alexis.l.johnson@exprealty.com", "agent_phone": "", "legacy_key": "prop_302cedarst"},
+    {"address": "4464 248th Lane Southeast, Issaquah, WA 98029", "stage": "Offers ready", "deal_url": "https://dealiodesk.ai/property-transactions/b7ac4aa2-cfd9-483f-a7e5-672e08ace254", "agent_name": "Jesse Sheldon", "agent_email": "jesse@gordymarks.com", "agent_phone": "4253937908", "legacy_key": "prop_4464248thlane"},
+    {"address": "2082 Marble Arch Drive, Decatur, GA 30035", "stage": "Offers ready", "deal_url": "https://dealiodesk.ai/property-transactions/0868e861-fafe-4fb9-9b69-87cbb903bba6", "agent_name": "Ashley Leyva Jorge", "agent_email": "aljhomesatl@gmail.com", "agent_phone": "", "legacy_key": "prop_2082marblearch"},
+    {"address": "231 22nd Street, Richmond, CA 94801", "stage": "Offers ready", "deal_url": "https://dealiodesk.ai/property-transactions/5fa43ec8-e146-41d5-a906-c448a52cfd5a", "agent_name": "Max Giffin", "agent_email": "max@c2realty.com", "agent_phone": "", "legacy_key": "prop_23122ndst"},
+    {"address": "8485 Pelican Lane, Seminole, FL", "stage": "Offers ready", "deal_url": "https://dealiodesk.ai/property-transactions/2ad6f9f7-adc4-4a09-b2f4-c22e09b3a3e3", "agent_name": "Eric Hathaway", "agent_email": "ericsellsfl.mvt@gmail.com", "agent_phone": "4803751603", "legacy_key": "prop_8485pelicanlane"},
+    {"address": "8935 Ruger Dr, New Port Richey, FL 34655", "stage": "Not in DealioDesk", "deal_url": "", "agent_name": "Melinda L Ray", "agent_email": "melinda.realestate1@gmail.com", "agent_phone": "", "legacy_key": "prop_8935rugerdr"},
+    {"address": "3152 Lost Creek Drive, Cantonment, FL 32533", "stage": "Offers ready", "deal_url": "https://dealiodesk.ai/property-transactions/f35068f3-727d-444e-b152-ddc5a2415da6", "agent_name": "Tim Ekelund", "agent_email": "timekelund55@gmail.com", "agent_phone": "", "legacy_key": "prop_3152lostcreek"},
+    {"address": "641 Lost Creek, Prosper, TX 75078", "stage": "Not in DealioDesk", "deal_url": "", "agent_name": "Marco Nkashama / Kosti Paras", "agent_email": "marconkashama@gmail.com", "agent_phone": "", "legacy_key": "prop_641lostcreek"},
+    {"address": "100 County Road 179, Sandia, TX 78383", "stage": "Not in DealioDesk", "deal_url": "", "agent_name": "Maria Zampikos", "agent_email": "ezampikos13@yahoo.com", "agent_phone": "", "legacy_key": "prop_100countyrd179"},
+    {"address": "147 Carter Street, Warrenville, SC", "stage": "Offer requested", "deal_url": "https://dealiodesk.ai/property-transactions/be765e18-97e0-4da7-8047-2b2d0fc7088f", "agent_name": "Tina Smith", "agent_email": "tina081562@yahoo.com", "agent_phone": "8035229405", "legacy_key": "prop_147carterst"},
+    {"address": "8898 Longs Peak Circle, Windsor", "stage": "Offer selected", "deal_url": "https://dealiodesk.ai/property-transactions/3e9a638c-d8cd-44e4-8311-0eeb2a2a07fc", "agent_name": "", "agent_email": "", "agent_phone": "", "legacy_key": "prop_8898longspeak"},
+    {"address": "89 Cripple Minnow Bend, Pottsboro, TX 75076", "stage": "Offers ready", "deal_url": "https://dealiodesk.ai/property-transactions/e32741ae-5082-4b92-899c-e98cd10b87e1", "agent_name": "Shannon Corona", "agent_email": "shannon@tmghomestx.com", "agent_phone": "", "legacy_key": "prop_89cripple"},
+    {"address": "805 East 4th Street, Wellington, KS", "stage": "Offers ready", "deal_url": "https://dealiodesk.ai/property-transactions/513804b8-144f-406e-b2a0-464d3d0fdb26", "agent_name": "Christina Moore", "agent_email": "christina@urbancoolhomes.com", "agent_phone": "9707101050", "legacy_key": "prop_805e4thwellington"},
+    {"address": "18212 Collridge Drive, Tampa, FL 33647", "stage": "Offers ready", "deal_url": "https://dealiodesk.ai/property-transactions/5b3f00db-2909-47f8-a274-5051c84b97c0", "agent_name": "Mike Flores", "agent_email": "mike.flores@54realty.com", "agent_phone": "8133681656", "legacy_key": "prop_18212collridge"},
+    {"address": "1347 Tee Time Court, Crosby, TX 77532", "stage": "Offers ready", "deal_url": "https://dealiodesk.ai/property-transactions/afb503e0-07b8-4a4c-bb8c-d806631f791f", "agent_name": "Jonathan Bell", "agent_email": "jon@wealthandhome.com", "agent_phone": "8322964002", "legacy_key": "prop_1347teetime"},
+    {"address": "503 Avrett Circle, Evans, GA 30809", "stage": "Offers ready", "deal_url": "https://dealiodesk.ai/property-transactions/2b08297f-c588-4eb6-b3ac-e71a95129f9e", "agent_name": "Lisa Miller EXP Realty", "agent_email": "lisa.miller@exprealty.com", "agent_phone": "7068333578", "legacy_key": "prop_503avrettcircle"}
+  ],
+  "tasks": [
+    {
+      "title": "Follow up with Marco Nkashama / Kosti Paras on 641 Lost Creek, Prosper TX — no Zoom recording found for Oct 15 call",
+      "status": "todo",
+      "priority": "medium",
+      "due": "2026-10-17",
+      "project": "641 Lost Creek",
+      "property_legacy_key": "prop_641lostcreek",
+      "source": "auto",
+      "legacy_id": "t_auto_641lostcreek01"
+    }
+  ]
+}

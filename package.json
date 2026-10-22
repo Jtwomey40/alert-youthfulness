@@ -1,0 +1,18 @@
+{
+  "name": "alert-youthfulness",
+  "version": "1.0.0",
+  "description": "Zoodealio task + property dashboard, always-on replacement for the Notion-based system",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "migrate": "node db/migrate.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "pg": "^8.12.0",
+    "dotenv": "^16.4.5"
+  }
+}
