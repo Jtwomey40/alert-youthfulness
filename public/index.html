@@ -45,7 +45,14 @@
       </div>
     </div>
     <div class="panel">
-      <h2>Deal Pipeline</h2>
+      <div class="toolbar">
+        <h2 style="margin:0;">Deal Pipeline</h2>
+        <div class="spacer"></div>
+        <div class="scope-toggle" id="overview-scope-toggle">
+          <button data-scope="mine" class="active">Mine</button>
+          <button data-scope="everyone">Everyone</button>
+        </div>
+      </div>
       <div class="board" id="overview-pipeline-board"></div>
     </div>
     <div class="panel">
@@ -129,6 +136,10 @@
           <option value="Offer selected">Offer selected</option>
           <option value="Not in DealioDesk">Not in DealioDesk</option>
         </select>
+        <div class="scope-toggle" id="properties-scope-toggle">
+          <button data-scope="mine" class="active">Mine</button>
+          <button data-scope="everyone">Everyone</button>
+        </div>
         <div class="spacer"></div>
         <button id="add-property-btn" class="primary-btn">+ Add Property</button>
       </div>
@@ -143,6 +154,7 @@
               <tr>
                 <th data-sort="address">Address</th>
                 <th data-sort="stage">Stage</th>
+                <th data-sort="assigned_to_me">Owner</th>
                 <th data-sort="agent_name">Agent</th>
                 <th data-sort="last_recap_date">Last Recap</th>
                 <th>Deal</th>

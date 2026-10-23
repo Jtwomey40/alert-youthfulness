@@ -92,3 +92,9 @@ CREATE INDEX IF NOT EXISTS idx_stage_history_changed_at ON stage_history(changed
 -- is in the 'Offers ready' stage. Reset to NULL automatically whenever stage changes
 -- (see PATCH /api/properties/:id) so a future visit to 'Offers ready' starts unchecked.
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS called_at TIMESTAMPTZ;
+
+-- Whether Jeremy currently owns this deal's stage in DealioDesk (vs. a teammate).
+-- Defaults to true so nothing is hidden before the first ownership sync runs.
+-- Kept current by the dealiodesk-zoom-evening-recap-v3 scheduled task, which
+-- cross-references DealioDesk's find_deals(owner="me") and PATCHes this field.
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS assigned_to_me BOOLEAN NOT NULL DEFAULT true;

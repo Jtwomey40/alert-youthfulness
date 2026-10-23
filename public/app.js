@@ -17,6 +17,7 @@ const state = {
   tasksFilterPriority: '',
   propertiesSearch: '',
   propertiesFilterStage: '',
+  ownershipScope: 'mine', // 'mine' | 'everyone' — filters out properties not assigned_to_me
   selectedTaskIds: new Set(),
   autoRefreshTimer: null
 };
@@ -184,8 +185,11 @@ function propertyCardHtml(p, opts) {
         </label>
       </div>`
     : '';
+  const ownerTag = p.assigned_to_me
+    ? ''
+    : '<span class="tag not-mine">Not yours</span>';
   return `<div class="card${linkable ? ' property-link' : ''}" data-id="${p.id}">
-      <div class="title">${escapeHtml(p.address)}</div>
+      <div class="title">${escapeHtml(p.address)} ${ownerTag}</div>
       <div class="meta">${escapeHtml(p.agent_name || 'No agent on file')}</div>
       ${checkboxes}
     </div>`;
@@ -249,7 +253,9 @@ function renderOverview() {
     </tr>`).join('') : `<tr><td colspan="5" class="muted">Nothing due today or overdue.</td></tr>`;
 
   const active = state.properties.filter(p =>
-    p.stage !== 'Not in DealioDesk' && !(p.stage === 'Offers ready' && p.called_at)
+    p.stage !== 'Not in DealioDesk' &&
+    !(p.stage === 'Offers ready' && p.called_at) &&
+    (state.ownershipScope !== 'mine' || p.assigned_to_me)
   );
   renderBoard(
     document.getElementById('overview-pipeline-board'),
@@ -368,6 +374,7 @@ function getFilteredSortedProperties() {
   const q = state.propertiesSearch.trim().toLowerCase();
   if (q) items = items.filter(p => (p.address || '').toLowerCase().includes(q) || (p.agent_name || '').toLowerCase().includes(q));
   if (state.propertiesFilterStage) items = items.filter(p => p.stage === state.propertiesFilterStage);
+  if (state.ownershipScope === 'mine') items = items.filter(p => p.assigned_to_me);
   return sortItems(items, state.propertiesSort.key, state.propertiesSort.dir);
 }
 
@@ -377,10 +384,11 @@ function renderPropertiesSection() {
   tbody.innerHTML = items.length ? items.map(p => `<tr data-id="${p.id}">
       <td><a href="#" class="property-link" data-id="${p.id}">${escapeHtml(p.address)}</a></td>
       <td>${escapeHtml(p.stage)}</td>
+      <td>${p.assigned_to_me ? '<span class="tag mine">Mine</span>' : '<span class="tag not-mine">Not yours</span>'}</td>
       <td>${escapeHtml(p.agent_name || '')}</td>
       <td>${p.last_recap_date ? fmtDate(p.last_recap_date) : '<span class="muted">none</span>'}</td>
       <td>${p.deal_url ? `<a href="${escapeHtml(p.deal_url)}" target="_blank" rel="noopener">Open</a>` : ''}</td>
-    </tr>`).join('') : `<tr><td colspan="5" class="muted">No properties match.</td></tr>`;
+    </tr>`).join('') : `<tr><td colspan="6" class="muted">No properties match.</td></tr>`;
 
   const boardItems = items.filter(p => !(p.stage === 'Offers ready' && p.called_at));
   renderBoard(
@@ -725,6 +733,20 @@ document.querySelectorAll('.view-toggle').forEach(toggle => {
     panel.querySelectorAll('[id$="-table-view"], [id$="-board-view"]').forEach(el => {
       el.style.display = el.id.endsWith(`${view}-view`) ? '' : 'none';
     });
+  });
+});
+
+// ---- Mine / Everyone ownership scope toggle ----
+document.querySelectorAll('.scope-toggle').forEach(toggle => {
+  toggle.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-scope]');
+    if (!btn) return;
+    state.ownershipScope = btn.dataset.scope;
+    document.querySelectorAll('.scope-toggle button').forEach(b => {
+      b.classList.toggle('active', b.dataset.scope === state.ownershipScope);
+    });
+    renderOverview();
+    renderPropertiesSection();
   });
 });
 

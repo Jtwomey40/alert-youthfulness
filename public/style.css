@@ -235,6 +235,20 @@ td input.inline-edit:focus {
 }
 .view-toggle button.active { background: var(--magenta); color: #fff; border-color: var(--magenta); }
 
+.scope-toggle { display: flex; gap: 8px; flex-wrap: wrap; }
+.scope-toggle button {
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.scope-toggle button.active { background: var(--black); color: #fff; border-color: var(--black); }
+
+.tag.not-mine { background: #f3f4f6; color: var(--gray); }
+.tag.mine { background: #ecfdf3; color: var(--green); }
+
 a { color: var(--magenta); }
 a.property-link { text-decoration: none; font-weight: 600; }
 a.property-link:hover { text-decoration: underline; }

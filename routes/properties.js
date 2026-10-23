@@ -3,16 +3,17 @@ const router = express.Router();
 const pool = require('../db/pool');
 const asyncHandler = require('./asyncHandler');
 
-// GET /api/properties  — list, optional ?stage=, ?legacy_key=, ?address=
+// GET /api/properties  — list, optional ?stage=, ?legacy_key=, ?address=, ?assigned_to_me=true|false
 // Also returns last_recap_date / recap_count / stage_since per property so the
 // dashboard can flag stale deals without an extra round trip per row.
 router.get('/', asyncHandler(async (req, res) => {
-  const { stage, legacy_key, address } = req.query;
+  const { stage, legacy_key, address, assigned_to_me } = req.query;
   const clauses = [];
   const values = [];
   if (stage) { values.push(stage); clauses.push(`p.stage = $${values.length}`); }
   if (legacy_key) { values.push(legacy_key); clauses.push(`p.legacy_key = $${values.length}`); }
   if (address) { values.push(address); clauses.push(`p.address = $${values.length}`); }
+  if (assigned_to_me !== undefined) { values.push(assigned_to_me === 'true'); clauses.push(`p.assigned_to_me = $${values.length}`); }
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   const { rows } = await pool.query(
     `SELECT p.*,
@@ -73,7 +74,7 @@ router.post('/', asyncHandler(async (req, res) => {
 // If `stage` is changing, logs the transition to stage_history for the activity feed / insights.
 router.patch('/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const fields = ['address', 'stage', 'deal_url', 'agent_name', 'agent_phone', 'agent_email', 'legacy_key', 'called_at'];
+  const fields = ['address', 'stage', 'deal_url', 'agent_name', 'agent_phone', 'agent_email', 'legacy_key', 'called_at', 'assigned_to_me'];
   const sets = [];
   const values = [];
   for (const f of fields) {
