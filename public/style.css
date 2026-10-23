@@ -248,6 +248,7 @@ td input.inline-edit:focus {
 
 .tag.not-mine { background: #f3f4f6; color: var(--gray); }
 .tag.mine { background: #ecfdf3; color: var(--green); }
+.tag.stale { background: #fff7ed; color: var(--amber); }
 
 a { color: var(--magenta); }
 a.property-link { text-decoration: none; font-weight: 600; }
@@ -432,6 +433,17 @@ a.property-link:hover { text-decoration: underline; }
 @media (max-width: 640px) {
   .property-detail-grid { grid-template-columns: 1fr; }
 }
+
+.property-detail-history {
+  border-top: 1px solid var(--border);
+  margin-top: 20px;
+  padding-top: 16px;
+}
+.edit-history-list { max-height: 200px; overflow-y: auto; font-size: 12px; }
+.edit-history-item { padding: 6px 0; border-bottom: 1px solid var(--border); }
+.edit-history-item:last-child { border-bottom: none; }
+.edit-history-item .edit-old { color: var(--gray); text-decoration: line-through; }
+.edit-history-item .edit-new { color: var(--black); font-weight: 600; }
 
 .recap-list { max-height: 360px; overflow-y: auto; }
 .recap-item {

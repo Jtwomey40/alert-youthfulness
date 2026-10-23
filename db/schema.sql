@@ -98,3 +98,26 @@ ALTER TABLE properties ADD COLUMN IF NOT EXISTS called_at TIMESTAMPTZ;
 -- Kept current by the dealiodesk-zoom-evening-recap-v3 scheduled task, which
 -- cross-references DealioDesk's find_deals(owner="me") and PATCHes this field.
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS assigned_to_me BOOLEAN NOT NULL DEFAULT true;
+
+-- Soft-delete: set when a property is archived (e.g. "not enough equity") instead of
+-- being hard-deleted, so the data isn't gone for good. NULL means active/not archived.
+-- Archived properties are excluded from GET /api/properties by default (see routes/properties.js).
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
+
+-- Rough dollar estimate/offer value for the deal, entered manually. Nullable since not
+-- every property has a number yet. Used for the pipeline-value-by-stage insight.
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS deal_value NUMERIC;
+
+-- Audit trail for manual edits to a property's fields (contact info, deal URL, value, etc.).
+-- Stage changes are already tracked separately in stage_history, so they're not duplicated here.
+-- Populated by the PATCH /api/properties/:id route whenever an auditable field actually changes.
+CREATE TABLE IF NOT EXISTS property_edits (
+  id              SERIAL PRIMARY KEY,
+  property_id     INTEGER NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
+  field           TEXT NOT NULL,
+  old_value       TEXT,
+  new_value       TEXT,
+  changed_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_property_edits_property ON property_edits(property_id);

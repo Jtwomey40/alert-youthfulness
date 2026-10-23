@@ -3,17 +3,25 @@ const router = express.Router();
 const pool = require('../db/pool');
 const asyncHandler = require('./asyncHandler');
 
-// GET /api/properties  — list, optional ?stage=, ?legacy_key=, ?address=, ?assigned_to_me=true|false
+// GET /api/properties  — list, optional ?stage=, ?legacy_key=, ?address=, ?assigned_to_me=true|false,
+// ?archived=true|all (default: excludes archived properties), ?recap_search=<text> (matches
+// against that property's call recap summaries, in addition to the usual filters).
 // Also returns last_recap_date / recap_count / stage_since per property so the
 // dashboard can flag stale deals without an extra round trip per row.
 router.get('/', asyncHandler(async (req, res) => {
-  const { stage, legacy_key, address, assigned_to_me } = req.query;
+  const { stage, legacy_key, address, assigned_to_me, archived, recap_search } = req.query;
   const clauses = [];
   const values = [];
   if (stage) { values.push(stage); clauses.push(`p.stage = $${values.length}`); }
   if (legacy_key) { values.push(legacy_key); clauses.push(`p.legacy_key = $${values.length}`); }
   if (address) { values.push(address); clauses.push(`p.address = $${values.length}`); }
   if (assigned_to_me !== undefined) { values.push(assigned_to_me === 'true'); clauses.push(`p.assigned_to_me = $${values.length}`); }
+  if (archived === 'true') { clauses.push(`p.archived_at IS NOT NULL`); }
+  else if (archived !== 'all') { clauses.push(`p.archived_at IS NULL`); }
+  if (recap_search) {
+    values.push(`%${recap_search}%`);
+    clauses.push(`EXISTS (SELECT 1 FROM call_recaps cr WHERE cr.property_id = p.id AND cr.summary ILIKE $${values.length})`);
+  }
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   const { rows } = await pool.query(
     `SELECT p.*,
@@ -36,7 +44,7 @@ router.get('/', asyncHandler(async (req, res) => {
   res.json(rows);
 }));
 
-// GET /api/properties/:id — single property + its recaps + its stage history
+// GET /api/properties/:id — single property + its recaps + its stage history + its edit history
 router.get('/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
   const propResult = await pool.query('SELECT * FROM properties WHERE id = $1', [id]);
@@ -49,19 +57,23 @@ router.get('/:id', asyncHandler(async (req, res) => {
     'SELECT * FROM stage_history WHERE property_id = $1 ORDER BY changed_at DESC',
     [id]
   );
-  res.json({ ...propResult.rows[0], call_recaps: recapsResult.rows, stage_history: historyResult.rows });
+  const editsResult = await pool.query(
+    'SELECT * FROM property_edits WHERE property_id = $1 ORDER BY changed_at DESC',
+    [id]
+  );
+  res.json({ ...propResult.rows[0], call_recaps: recapsResult.rows, stage_history: historyResult.rows, edit_history: editsResult.rows });
 }));
 
 // POST /api/properties — create
 router.post('/', asyncHandler(async (req, res) => {
-  const { address, stage, deal_url, agent_name, agent_phone, agent_email, legacy_key } = req.body;
+  const { address, stage, deal_url, agent_name, agent_phone, agent_email, legacy_key, deal_value } = req.body;
   if (!address) return res.status(400).json({ error: 'address is required' });
   try {
     const { rows } = await pool.query(
-      `INSERT INTO properties (address, stage, deal_url, agent_name, agent_phone, agent_email, legacy_key)
-       VALUES ($1, COALESCE($2,'Intake'), $3, $4, $5, $6, $7)
+      `INSERT INTO properties (address, stage, deal_url, agent_name, agent_phone, agent_email, legacy_key, deal_value)
+       VALUES ($1, COALESCE($2,'Intake'), $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [address, stage, deal_url, agent_name, agent_phone, agent_email, legacy_key]
+      [address, stage, deal_url, agent_name, agent_phone, agent_email, legacy_key, deal_value || null]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -70,11 +82,17 @@ router.post('/', asyncHandler(async (req, res) => {
   }
 }));
 
+// Fields whose changes get written to property_edits as an audit trail. Stage is tracked
+// separately in stage_history, and called_at/archived_at are lifecycle toggles rather than
+// "edits" in the sense Jeremy cares about, so none of those three are duplicated here.
+const AUDITED_FIELDS = ['address', 'deal_url', 'agent_name', 'agent_phone', 'agent_email', 'legacy_key', 'deal_value', 'assigned_to_me'];
+
 // PATCH /api/properties/:id — partial update (never overwrites with null unless explicitly passed).
 // If `stage` is changing, logs the transition to stage_history for the activity feed / insights.
+// Any change to an AUDITED_FIELDS field is logged to property_edits for the edit-history view.
 router.patch('/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const fields = ['address', 'stage', 'deal_url', 'agent_name', 'agent_phone', 'agent_email', 'legacy_key', 'called_at', 'assigned_to_me'];
+  const fields = ['address', 'stage', 'deal_url', 'agent_name', 'agent_phone', 'agent_email', 'legacy_key', 'deal_value', 'called_at', 'assigned_to_me', 'archived_at'];
   const sets = [];
   const values = [];
   for (const f of fields) {
@@ -85,17 +103,16 @@ router.patch('/:id', asyncHandler(async (req, res) => {
   }
   if (!sets.length) return res.status(400).json({ error: 'no fields to update' });
 
-  let previousStage = null;
-  if (req.body.stage !== undefined) {
-    const current = await pool.query('SELECT stage FROM properties WHERE id = $1', [id]);
-    if (!current.rows.length) return res.status(404).json({ error: 'not found' });
-    previousStage = current.rows[0].stage;
-    // Changing stage resets the "called them" checkbox, unless this same request
-    // is explicitly setting called_at itself.
-    if (req.body.called_at === undefined && req.body.stage !== previousStage) {
-      values.push(null);
-      sets.push(`called_at = $${values.length}`);
-    }
+  const current = await pool.query('SELECT * FROM properties WHERE id = $1', [id]);
+  if (!current.rows.length) return res.status(404).json({ error: 'not found' });
+  const before = current.rows[0];
+  const previousStage = before.stage;
+
+  // Changing stage resets the "called them" checkbox, unless this same request
+  // is explicitly setting called_at itself.
+  if (req.body.stage !== undefined && req.body.called_at === undefined && req.body.stage !== previousStage) {
+    values.push(null);
+    sets.push(`called_at = $${values.length}`);
   }
 
   values.push(id);
@@ -112,12 +129,27 @@ router.patch('/:id', asyncHandler(async (req, res) => {
     );
   }
 
+  for (const f of AUDITED_FIELDS) {
+    if (req.body[f] === undefined) continue;
+    const oldVal = before[f];
+    const newVal = rows[0][f];
+    const changed = String(oldVal ?? '') !== String(newVal ?? '');
+    if (changed) {
+      await pool.query(
+        `INSERT INTO property_edits (property_id, field, old_value, new_value) VALUES ($1, $2, $3, $4)`,
+        [id, f, oldVal == null ? null : String(oldVal), newVal == null ? null : String(newVal)]
+      );
+    }
+  }
+
   res.json(rows[0]);
 }));
 
-// DELETE /api/properties/:id — permanently removes the property (e.g. "not enough equity").
-// call_recaps and stage_history cascade-delete; tasks keep their row but property_id is set
-// to NULL (see schema), so nothing else breaks.
+// DELETE /api/properties/:id — permanently removes the property. Kept for rare cases that
+// genuinely need hard deletion, but the dashboard's "not enough equity" checkbox no longer
+// uses this route — it PATCHes archived_at instead so the data is archived, not destroyed.
+// call_recaps, stage_history and property_edits cascade-delete; tasks keep their row but
+// property_id is set to NULL (see schema), so nothing else breaks.
 router.delete('/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { rows } = await pool.query('DELETE FROM properties WHERE id = $1 RETURNING id', [id]);

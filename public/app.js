@@ -19,7 +19,11 @@ const state = {
   propertiesFilterStage: '',
   ownershipScope: 'mine', // 'mine' | 'everyone' — filters out properties not assigned_to_me
   selectedTaskIds: new Set(),
-  autoRefreshTimer: null
+  autoRefreshTimer: null,
+  recapMatchIds: null, // null = no active recap search; otherwise a Set of property ids matching the current recap search
+  recapSearchTimer: null,
+  staleIds: new Set(), // property ids with a stale/missing recap, from the Needs Attention data
+  archivedProperties: []
 };
 
 // ---- Utilities ----
@@ -31,6 +35,16 @@ function fmtDate(d) { if (!d) return ''; return new Date(d).toLocaleDateString(u
 function fmtDateTime(d) { if (!d) return ''; return new Date(d).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
 function priorityTag(p) { return `<span class="tag ${escapeHtml(p)}">${escapeHtml(p)}</span>`; }
 function statusTag(s) { return `<span class="tag ${escapeHtml(s)}">${escapeHtml(STATUS_LABELS[s] || s)}</span>`; }
+function fmtMoney(v) {
+  if (v == null || v === '') return '';
+  const n = Number(v);
+  if (Number.isNaN(n)) return '';
+  return n.toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+}
+function debounce(fn, ms) {
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
 
 function sortItems(items, key, dir) {
   const mult = dir === 'desc' ? -1 : 1;
@@ -91,6 +105,7 @@ async function loadAll() {
     state.stats = stats;
     state.attention = attention;
     state.activity = activity;
+    state.staleIds = new Set((attention.stale_recaps || []).map(p => String(p.id)));
     hideError();
     renderAll();
     statusEl.textContent = `Updated ${new Date().toLocaleTimeString()}`;
@@ -188,9 +203,12 @@ function propertyCardHtml(p, opts) {
   const ownerTag = p.assigned_to_me
     ? ''
     : '<span class="tag not-mine">Not yours</span>';
+  const staleTag = state.staleIds.has(String(p.id)) ? '<span class="tag stale">Stale</span>' : '';
+  const valueMeta = p.deal_value ? `<div class="meta">${fmtMoney(p.deal_value)}</div>` : '';
   return `<div class="card${linkable ? ' property-link' : ''}" data-id="${p.id}">
-      <div class="title">${escapeHtml(p.address)} ${ownerTag}</div>
+      <div class="title">${escapeHtml(p.address)} ${ownerTag} ${staleTag}</div>
       <div class="meta">${escapeHtml(p.agent_name || 'No agent on file')}</div>
+      ${valueMeta}
       ${checkboxes}
     </div>`;
 }
@@ -214,10 +232,11 @@ async function toggleCalledAt(id, checked) {
   }
 }
 
-// "Not enough equity" — permanently removes the property. Confirms first since this
-// can't be undone; re-renders either way so the checkbox doesn't stay visually checked.
+// "Not enough equity" — archives the property (soft-delete) rather than destroying it,
+// so it can be restored later from the Archived Properties list. Confirms first; re-renders
+// either way so the checkbox doesn't stay visually checked.
 async function handleNotEnoughEquity(id) {
-  if (!window.confirm('Delete this property? This cannot be undone.')) {
+  if (!window.confirm('Archive this property? It will be hidden from the dashboard but can be restored later from Archived Properties.')) {
     renderOverview();
     renderPropertiesSection();
     return;
@@ -227,12 +246,39 @@ async function handleNotEnoughEquity(id) {
   if (idx !== -1) state.properties.splice(idx, 1);
   renderAll();
   try {
-    await apiFetch(`/api/properties/${id}`, { method: 'DELETE' });
+    await patchJSON(`/api/properties/${id}`, { archived_at: new Date().toISOString() });
   } catch (err) {
     if (removed) state.properties.splice(idx, 0, removed);
-    showError('Could not delete property: ' + err.message);
+    showError('Could not archive property: ' + err.message);
     renderAll();
   }
+}
+
+// ---- Archived Properties modal ----
+async function loadArchivedProperties() {
+  const tbody = document.querySelector('#archived-properties-table tbody');
+  tbody.innerHTML = `<tr><td colspan="4" class="muted">Loading…</td></tr>`;
+  try {
+    const archived = await getJSON('/api/properties?archived=true');
+    state.archivedProperties = archived;
+    tbody.innerHTML = archived.length ? archived.map(p => `<tr data-id="${p.id}">
+        <td>${escapeHtml(p.address)}</td>
+        <td>${escapeHtml(p.stage)}</td>
+        <td>${escapeHtml(p.agent_name || '')}</td>
+        <td><button type="button" class="secondary-btn small restore-property-btn" data-id="${p.id}">Restore</button></td>
+      </tr>`).join('') : `<tr><td colspan="4" class="muted">No archived properties.</td></tr>`;
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="4" class="muted">Could not load archived properties.</td></tr>`;
+    showError('Could not load archived properties: ' + err.message);
+  }
+}
+
+async function restoreProperty(id) {
+  try {
+    await patchJSON(`/api/properties/${id}`, { archived_at: null });
+    await loadArchivedProperties();
+    await loadAll();
+  } catch (err) { showError('Could not restore property: ' + err.message); }
 }
 
 // ---- Overview ----
@@ -372,23 +418,44 @@ function downloadICS(task) {
 function getFilteredSortedProperties() {
   let items = [...state.properties];
   const q = state.propertiesSearch.trim().toLowerCase();
-  if (q) items = items.filter(p => (p.address || '').toLowerCase().includes(q) || (p.agent_name || '').toLowerCase().includes(q));
+  if (q) {
+    items = items.filter(p =>
+      (p.address || '').toLowerCase().includes(q) ||
+      (p.agent_name || '').toLowerCase().includes(q) ||
+      (state.recapMatchIds && state.recapMatchIds.has(String(p.id)))
+    );
+  }
   if (state.propertiesFilterStage) items = items.filter(p => p.stage === state.propertiesFilterStage);
   if (state.ownershipScope === 'mine') items = items.filter(p => p.assigned_to_me);
   return sortItems(items, state.propertiesSort.key, state.propertiesSort.dir);
 }
 
+// Looks up which properties have a call recap matching the current search text, so
+// "search" can match recap content in addition to address/agent (which are already
+// filtered client-side above). Debounced so it doesn't fire on every keystroke.
+const fetchRecapMatches = debounce(async (q) => {
+  if (!q) { state.recapMatchIds = null; renderPropertiesSection(); return; }
+  try {
+    const matches = await getJSON(`/api/properties?recap_search=${encodeURIComponent(q)}&archived=all`);
+    // Only apply if the search box still holds the same text (avoids stale results racing in).
+    if (state.propertiesSearch.trim().toLowerCase() !== q) return;
+    state.recapMatchIds = new Set(matches.map(p => String(p.id)));
+    renderPropertiesSection();
+  } catch (err) { /* silently ignore — recap search is an enhancement, not critical */ }
+}, 300);
+
 function renderPropertiesSection() {
   const items = getFilteredSortedProperties();
   const tbody = document.querySelector('#properties-table tbody');
   tbody.innerHTML = items.length ? items.map(p => `<tr data-id="${p.id}">
-      <td><a href="#" class="property-link" data-id="${p.id}">${escapeHtml(p.address)}</a></td>
+      <td><a href="#" class="property-link" data-id="${p.id}">${escapeHtml(p.address)}</a>${state.staleIds.has(String(p.id)) ? ' <span class="tag stale">Stale</span>' : ''}</td>
       <td>${escapeHtml(p.stage)}</td>
+      <td>${p.deal_value ? fmtMoney(p.deal_value) : '<span class="muted">—</span>'}</td>
       <td>${p.assigned_to_me ? '<span class="tag mine">Mine</span>' : '<span class="tag not-mine">Not yours</span>'}</td>
       <td>${escapeHtml(p.agent_name || '')}</td>
       <td>${p.last_recap_date ? fmtDate(p.last_recap_date) : '<span class="muted">none</span>'}</td>
       <td>${p.deal_url ? `<a href="${escapeHtml(p.deal_url)}" target="_blank" rel="noopener">Open</a>` : ''}</td>
-    </tr>`).join('') : `<tr><td colspan="6" class="muted">No properties match.</td></tr>`;
+    </tr>`).join('') : `<tr><td colspan="7" class="muted">No properties match.</td></tr>`;
 
   const boardItems = items.filter(p => !(p.stage === 'Offers ready' && p.called_at));
   renderBoard(
@@ -452,6 +519,11 @@ function renderInsights() {
     ? s.avg_days_per_stage.map(r => `<tr><td>${escapeHtml(r.stage)}</td><td>${r.avg_days}</td></tr>`).join('')
     : `<tr><td colspan="2" class="muted">No stage-transition data yet.</td></tr>`;
 
+  const valueTbody = document.querySelector('#insights-value-table tbody');
+  valueTbody.innerHTML = s && s.pipeline_value_by_stage && s.pipeline_value_by_stage.length
+    ? s.pipeline_value_by_stage.map(r => `<tr><td>${escapeHtml(r.stage)}</td><td>${fmtMoney(r.total_value) || '$0'}</td><td>${r.n_with_value}</td></tr>`).join('')
+    : `<tr><td colspan="3" class="muted">No deal values entered yet.</td></tr>`;
+
   renderAttention(document.getElementById('insights-attention-content'), state.attention, { compact: false });
   renderActivityList(document.getElementById('insights-activity-list'), state.activity, null);
 }
@@ -484,6 +556,17 @@ document.getElementById('task-form').addEventListener('submit', async (e) => {
   } catch (err) { showError('Could not add task: ' + err.message); }
 });
 
+// ---- Archived Properties modal ----
+document.getElementById('view-archived-btn').addEventListener('click', () => {
+  openModal('archived-modal-overlay');
+  loadArchivedProperties();
+});
+document.querySelector('#archived-properties-table tbody').addEventListener('click', (e) => {
+  const btn = e.target.closest('.restore-property-btn');
+  if (!btn) return;
+  restoreProperty(btn.dataset.id);
+});
+
 // ---- Add Property modal ----
 document.getElementById('add-property-btn').addEventListener('click', () => {
   document.getElementById('property-form').reset();
@@ -495,7 +578,8 @@ document.getElementById('property-form').addEventListener('submit', async (e) =>
   const fd = new FormData(e.target);
   const body = {
     address: fd.get('address'), stage: fd.get('stage'), deal_url: fd.get('deal_url') || null,
-    agent_name: fd.get('agent_name') || null, agent_phone: fd.get('agent_phone') || null, agent_email: fd.get('agent_email') || null
+    agent_name: fd.get('agent_name') || null, agent_phone: fd.get('agent_phone') || null, agent_email: fd.get('agent_email') || null,
+    deal_value: fd.get('deal_value') || null
   };
   try {
     await postJSON('/api/properties', body);
@@ -572,6 +656,7 @@ async function openPropertyDetail(id) {
     form.querySelector('[name="agent_name"]').value = p.agent_name || '';
     form.querySelector('[name="agent_phone"]').value = p.agent_phone || '';
     form.querySelector('[name="agent_email"]').value = p.agent_email || '';
+    form.querySelector('[name="deal_value"]').value = p.deal_value || '';
 
     const recapsEl = document.getElementById('property-detail-recaps');
     recapsEl.innerHTML = (p.call_recaps && p.call_recaps.length)
@@ -580,6 +665,16 @@ async function openPropertyDetail(id) {
           <div class="recap-summary">${escapeHtml(r.summary)}</div>
         </div>`).join('')
       : '<p class="muted">No call recaps yet.</p>';
+
+    const historyEl = document.getElementById('property-detail-edit-history');
+    historyEl.innerHTML = (p.edit_history && p.edit_history.length)
+      ? p.edit_history.map(h => `<div class="edit-history-item">
+          <span class="muted small">${fmtDateTime(h.changed_at)}</span>
+          <strong>${escapeHtml(h.field)}</strong>:
+          ${h.old_value ? `<span class="edit-old">${escapeHtml(h.old_value)}</span> →` : '(blank) →'}
+          <span class="edit-new">${escapeHtml(h.new_value ?? '(blank)')}</span>
+        </div>`).join('')
+      : '<p class="muted">No edits logged yet.</p>';
 
     document.getElementById('property-detail-log-call-btn').onclick = () => {
       closeModal('property-detail-modal-overlay');
@@ -596,7 +691,8 @@ document.getElementById('property-detail-form').addEventListener('submit', async
   const id = fd.get('id');
   const body = {
     stage: fd.get('stage'), deal_url: fd.get('deal_url') || null,
-    agent_name: fd.get('agent_name') || null, agent_phone: fd.get('agent_phone') || null, agent_email: fd.get('agent_email') || null
+    agent_name: fd.get('agent_name') || null, agent_phone: fd.get('agent_phone') || null, agent_email: fd.get('agent_email') || null,
+    deal_value: fd.get('deal_value') || null
   };
   try {
     await patchJSON(`/api/properties/${id}`, body);
@@ -701,7 +797,13 @@ document.querySelectorAll('#tasks-table th[data-sort]').forEach(th => {
   });
 });
 
-document.getElementById('properties-search').addEventListener('input', (e) => { state.propertiesSearch = e.target.value; renderPropertiesSection(); });
+document.getElementById('properties-search').addEventListener('input', (e) => {
+  state.propertiesSearch = e.target.value;
+  const q = state.propertiesSearch.trim().toLowerCase();
+  if (!q) state.recapMatchIds = null;
+  renderPropertiesSection();
+  fetchRecapMatches(q);
+});
 document.getElementById('properties-filter-stage').addEventListener('change', (e) => { state.propertiesFilterStage = e.target.value; renderPropertiesSection(); });
 
 document.querySelectorAll('#properties-table th[data-sort]').forEach(th => {

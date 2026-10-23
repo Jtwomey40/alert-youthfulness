@@ -5,7 +5,7 @@ const asyncHandler = require('./asyncHandler');
 
 // GET /api/insights/stats — rollup numbers for the dashboard's Insights tab.
 router.get('/stats', asyncHandler(async (req, res) => {
-  const [tasksWeek, tasksMonth, byPriority, byStage, closedMonth, avgDaysPerStage] = await Promise.all([
+  const [tasksWeek, tasksMonth, byPriority, byStage, closedMonth, avgDaysPerStage, valueByStage] = await Promise.all([
     pool.query(`SELECT COUNT(*)::int AS n FROM tasks WHERE status = 'done' AND completed_at >= now() - interval '7 days'`),
     pool.query(`SELECT COUNT(*)::int AS n FROM tasks WHERE status = 'done' AND completed_at >= now() - interval '30 days'`),
     pool.query(`SELECT priority, COUNT(*)::int AS n FROM tasks WHERE status != 'done' GROUP BY priority`),
@@ -19,6 +19,12 @@ router.get('/stats', asyncHandler(async (req, res) => {
         FROM stage_history
       ) t
       GROUP BY to_stage
+    `),
+    pool.query(`
+      SELECT stage, COALESCE(SUM(deal_value), 0)::numeric AS total_value, COUNT(deal_value)::int AS n_with_value
+      FROM properties
+      WHERE archived_at IS NULL AND stage != 'Not in DealioDesk'
+      GROUP BY stage
     `)
   ]);
 
@@ -29,7 +35,8 @@ router.get('/stats', asyncHandler(async (req, res) => {
     properties_by_stage: byStage.rows,
     deals_reached_offer_selected_30d: closedMonth.rows[0].n,
     avg_days_per_stage: avgDaysPerStage.rows,
-    avg_days_per_stage_note: 'Based on stage transitions tracked since this feature shipped — history before that is not available.'
+    avg_days_per_stage_note: 'Based on stage transitions tracked since this feature shipped — history before that is not available.',
+    pipeline_value_by_stage: valueByStage.rows
   });
 }));
 
@@ -45,13 +52,13 @@ router.get('/needs-attention', asyncHandler(async (req, res) => {
         SELECT property_id, MAX(meeting_date) AS last_recap_date
         FROM call_recaps GROUP BY property_id
       ) recaps ON recaps.property_id = p.id
-      WHERE p.stage NOT IN ('Offer selected', 'Not in DealioDesk')
+      WHERE p.stage NOT IN ('Offer selected', 'Not in DealioDesk') AND p.archived_at IS NULL
         AND (recaps.last_recap_date IS NULL OR recaps.last_recap_date < (CURRENT_DATE - $1::int))
       ORDER BY p.address ASC
     `, [staleDays]),
     pool.query(`
       SELECT id, address, stage FROM properties
-      WHERE stage NOT IN ('Not in DealioDesk') AND (agent_email IS NULL OR agent_email = '')
+      WHERE stage NOT IN ('Not in DealioDesk') AND archived_at IS NULL AND (agent_email IS NULL OR agent_email = '')
       ORDER BY address ASC
     `),
     pool.query(`
