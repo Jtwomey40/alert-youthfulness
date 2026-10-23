@@ -2,6 +2,11 @@
 const STATUS_LABELS = { todo: 'To do', in_progress: 'In progress', done: 'Done' };
 const STAGE_ORDER = ['Intake', 'Offer requested', 'Offers ready', 'Offer selected', 'Not in DealioDesk'];
 const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 };
+const ATTENTION_TABS = [
+  { key: 'stale_recaps', label: 'Stale / Missing Recaps' },
+  { key: 'missing_agent_contact', label: 'Missing Agent Contact' },
+  { key: 'overdue_tasks', label: 'Overdue Tasks' }
+];
 
 // ---- State ----
 const state = {
@@ -17,6 +22,8 @@ const state = {
   tasksFilterPriority: '',
   propertiesSearch: '',
   propertiesFilterStage: '',
+  agentsSearch: '',
+  attentionTab: 'stale_recaps',
   ownershipScope: 'mine', // 'mine' | 'everyone' — filters out properties not assigned_to_me
   selectedTaskIds: new Set(),
   autoRefreshTimer: null,
@@ -44,6 +51,14 @@ function fmtMoney(v) {
 function debounce(fn, ms) {
   let t;
   return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+function stageSlug(stage) {
+  return 'stage-' + String(stage || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+function agentInitials(name) {
+  if (!name) return '';
+  const parts = String(name).trim().split(/\s+/);
+  return parts.slice(0, 2).map(p => p[0]).join('').toUpperCase();
 }
 
 function sortItems(items, key, dir) {
@@ -124,10 +139,16 @@ function renderAll() {
 }
 
 // ---- Generic board renderer ----
-function renderBoard(container, items, groupKeyFn, groupOrder, groupLabelFn, cardHtmlFn) {
+function renderBoard(container, items, groupKeyFn, groupOrder, groupLabelFn, cardHtmlFn, opts) {
+  opts = opts || {};
   container.innerHTML = groupOrder.map(key => {
     const groupItems = items.filter(i => groupKeyFn(i) === key);
-    return `<div class="column"><h3>${escapeHtml(groupLabelFn(key))} (${groupItems.length})</h3>${groupItems.map(cardHtmlFn).join('')}</div>`;
+    const extraClass = opts.columnClass ? ' ' + opts.columnClass(key) : '';
+    const addBtn = opts.addButton ? `<button type="button" class="column-add-btn" data-add-stage="${escapeHtml(key)}" title="Add property">+</button>` : '';
+    return `<div class="column${extraClass}">
+      <div class="column-header"><h3>${escapeHtml(groupLabelFn(key))} (${groupItems.length})</h3>${addBtn}</div>
+      ${groupItems.map(cardHtmlFn).join('')}
+    </div>`;
   }).join('');
 }
 
@@ -205,9 +226,13 @@ function propertyCardHtml(p, opts) {
     : '<span class="tag not-mine">Not yours</span>';
   const staleTag = state.staleIds.has(String(p.id)) ? '<span class="tag stale">Stale</span>' : '';
   const valueMeta = p.deal_value ? `<div class="meta">${fmtMoney(p.deal_value)}</div>` : '';
+  const agentHtml = p.agent_name
+    ? `<div class="card-agent"><span class="agent-avatar">${escapeHtml(agentInitials(p.agent_name))}</span> ${escapeHtml(p.agent_name)}</div>`
+    : `<div class="card-agent"><span class="agent-avatar none">&ndash;</span> No agent on file</div>`;
   return `<div class="card${linkable ? ' property-link' : ''}" data-id="${p.id}">
+      <div class="card-photo">&#127968;</div>
       <div class="title">${escapeHtml(p.address)} ${ownerTag} ${staleTag}</div>
-      <div class="meta">${escapeHtml(p.agent_name || 'No agent on file')}</div>
+      ${agentHtml}
       ${valueMeta}
       ${checkboxes}
     </div>`;
@@ -282,21 +307,128 @@ async function restoreProperty(id) {
 }
 
 // ---- Overview ----
-function renderOverview() {
-  renderAttention(document.getElementById('overview-attention-content'), state.attention, { compact: true });
+function renderGreeting() {
+  const h = new Date().getHours();
+  const period = h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening';
+  const el = document.getElementById('greeting');
+  if (el) el.textContent = `Good ${period}, Jeremy`;
+}
 
+function updateNavBadge() {
   const today = isoToday();
-  const dueRows = state.tasks
+  const overdueCount = state.tasks.filter(t => t.status !== 'done' && t.due && t.due < today).length;
+  const badge = document.getElementById('nav-tasks-badge');
+  if (overdueCount > 0) {
+    badge.textContent = overdueCount;
+    badge.style.display = '';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function renderStatTiles() {
+  const container = document.getElementById('overview-stats-cards');
+  const today = isoToday();
+  const activeDeals = state.properties.filter(p => p.stage !== 'Not in DealioDesk').length;
+  const agentCount = buildAgentDirectory(state.properties).length;
+  const attn = state.attention || { stale_recaps: [], missing_agent_contact: [], overdue_tasks: [] };
+  const needAttention = (attn.stale_recaps || []).length + (attn.missing_agent_contact || []).length + (attn.overdue_tasks || []).length;
+  const overdueTasks = state.tasks.filter(t => t.status !== 'done' && t.due && t.due < today).length;
+
+  const tiles = [
+    { label: 'Active Deals', value: activeDeals, icon: '&#127970;', cls: 'pink' },
+    { label: 'Agents', value: agentCount, icon: '&#128100;', cls: 'green' },
+    { label: 'Need Attention', value: needAttention, icon: '&#9888;', cls: 'amber', flag: needAttention > 0 },
+    { label: 'Overdue Tasks', value: overdueTasks, icon: '&#9203;', cls: 'red', flag: overdueTasks > 0 }
+  ];
+  container.innerHTML = tiles.map(t => `
+    <div class="stat-tile">
+      <div class="stat-tile-icon ${t.cls}">${t.icon}</div>
+      <div class="stat-tile-body">
+        <div class="stat-tile-value">${t.value}</div>
+        <div class="stat-tile-label">${escapeHtml(t.label)}${t.flag ? '<span class="stat-tile-flag">&#33;</span>' : ''}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderAttentionTabs() {
+  const container = document.getElementById('overview-attention-tabs');
+  const attn = state.attention || {};
+  container.innerHTML = ATTENTION_TABS.map(t => {
+    const count = (attn[t.key] || []).length;
+    return `<button type="button" class="attention-tab${state.attentionTab === t.key ? ' active' : ''}" data-tab="${t.key}">${escapeHtml(t.label)} <span class="count">${count}</span></button>`;
+  }).join('');
+}
+
+function renderAttentionRows() {
+  const container = document.getElementById('overview-attention-content');
+  const attn = state.attention;
+  if (!attn) { container.innerHTML = '<p class="muted">Loading…</p>'; return; }
+  const items = attn[state.attentionTab] || [];
+  if (!items.length) { container.innerHTML = '<p class="muted">Nothing here right now.</p>'; return; }
+  const rowHtmlFns = {
+    stale_recaps: p => `<div class="attention-row" data-property-id="${p.id}">
+        <div class="attention-row-icon">&#9888;</div>
+        <div class="attention-row-body">
+          <div class="attention-row-title">${escapeHtml(p.address)}</div>
+          <div class="attention-row-sub">${p.last_recap_date ? 'Last recap ' + fmtDate(p.last_recap_date) : 'No recap on file'}</div>
+        </div>
+        <span class="attention-row-chevron">&rsaquo;</span>
+      </div>`,
+    missing_agent_contact: p => `<div class="attention-row" data-property-id="${p.id}">
+        <div class="attention-row-icon">&#128100;</div>
+        <div class="attention-row-body">
+          <div class="attention-row-title">${escapeHtml(p.address)}</div>
+          <div class="attention-row-sub">${escapeHtml(p.stage)}</div>
+        </div>
+        <span class="attention-row-chevron">&rsaquo;</span>
+      </div>`,
+    overdue_tasks: t => `<div class="attention-row" data-task-id="${t.id}">
+        <div class="attention-row-icon">&#9203;</div>
+        <div class="attention-row-body">
+          <div class="attention-row-title">${escapeHtml(t.title)}</div>
+          <div class="attention-row-sub">${t.property_address ? escapeHtml(t.property_address) : ''}</div>
+        </div>
+        <span class="attention-row-flag">OVERDUE</span>
+        <span class="attention-row-chevron">&rsaquo;</span>
+      </div>`
+  };
+  const rowHtml = rowHtmlFns[state.attentionTab] || (() => '');
+  container.innerHTML = `<div class="attention-rows">${items.map(rowHtml).join('')}</div>`;
+}
+
+function renderTimeline() {
+  const container = document.getElementById('overview-timeline');
+  const today = isoToday();
+  const items = state.tasks
     .filter(t => t.status !== 'done' && t.due && t.due <= today)
-    .sort((a, b) => (a.due || '').localeCompare(b.due || ''));
-  const tbody = document.querySelector('#overview-tasks-table tbody');
-  tbody.innerHTML = dueRows.length ? dueRows.map(t => `<tr>
-      <td>${escapeHtml(t.title)}</td>
-      <td>${priorityTag(t.priority)}</td>
-      <td>${t.due < today ? '<span class="tag overdue">OVERDUE</span> ' : ''}${fmtDate(t.due)}</td>
-      <td>${escapeHtml(t.project || '')}</td>
-      <td>${statusTag(t.status)}</td>
-    </tr>`).join('') : `<tr><td colspan="5" class="muted">Nothing due today or overdue.</td></tr>`;
+    .sort((a, b) => {
+      const overdueA = a.due < today, overdueB = b.due < today;
+      if (overdueA !== overdueB) return overdueA ? -1 : 1;
+      return (a.due || '').localeCompare(b.due || '');
+    });
+  if (!items.length) { container.innerHTML = '<p class="timeline-empty">Nothing due today or overdue.</p>'; return; }
+  container.innerHTML = items.map(t => {
+    const overdue = t.due < today;
+    return `<div class="timeline-item${overdue ? ' overdue' : ''}">
+        <span class="timeline-dot"></span>
+        <span class="timeline-time">${overdue ? 'OVERDUE' : 'Due today'}</span>
+        <div>
+          <div class="timeline-title">${escapeHtml(t.title)}</div>
+          <div class="timeline-sub">${escapeHtml(t.project || '')}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function renderOverview() {
+  renderGreeting();
+  renderStatTiles();
+  renderAttentionTabs();
+  renderAttentionRows();
+  renderTimeline();
+  updateNavBadge();
 
   const active = state.properties.filter(p =>
     p.stage !== 'Not in DealioDesk' &&
@@ -309,7 +441,8 @@ function renderOverview() {
     p => p.stage,
     STAGE_ORDER.filter(s => s !== 'Not in DealioDesk'),
     s => s,
-    p => propertyCardHtml(p, { linkable: false })
+    p => propertyCardHtml(p, { linkable: false }),
+    { columnClass: stageSlug, addButton: true }
   );
 
   renderActivityList(document.getElementById('overview-activity-list'), state.activity, 8);
@@ -487,13 +620,21 @@ function buildAgentDirectory(properties) {
 
 function renderAgents() {
   const agents = buildAgentDirectory(state.properties);
+  const q = state.agentsSearch.trim().toLowerCase();
+  const filtered = q
+    ? agents.filter(a =>
+        a.name.toLowerCase().includes(q) ||
+        a.email.toLowerCase().includes(q) ||
+        a.properties.some(addr => (addr || '').toLowerCase().includes(q))
+      )
+    : agents;
   const tbody = document.querySelector('#agents-table tbody');
-  tbody.innerHTML = agents.length ? agents.map(a => `<tr>
+  tbody.innerHTML = filtered.length ? filtered.map(a => `<tr>
       <td>${escapeHtml(a.name)}</td>
       <td>${a.email ? `<a href="mailto:${escapeHtml(a.email)}">${escapeHtml(a.email)}</a>` : ''}</td>
       <td>${escapeHtml(a.phone)}</td>
       <td>${a.properties.map(escapeHtml).join(', ')}</td>
-    </tr>`).join('') : `<tr><td colspan="4" class="muted">No agents on file yet.</td></tr>`;
+    </tr>`).join('') : `<tr><td colspan="4" class="muted">No agents match.</td></tr>`;
 }
 
 // ---- Insights ----
@@ -805,6 +946,64 @@ document.getElementById('properties-search').addEventListener('input', (e) => {
   fetchRecapMatches(q);
 });
 document.getElementById('properties-filter-stage').addEventListener('change', (e) => { state.propertiesFilterStage = e.target.value; renderPropertiesSection(); });
+
+document.getElementById('agents-search').addEventListener('input', (e) => {
+  state.agentsSearch = e.target.value;
+  renderAgents();
+});
+
+// ---- Global search (topbar) — mirrors into each section's own search box ----
+document.getElementById('global-search').addEventListener('input', (e) => {
+  const q = e.target.value;
+  state.tasksSearch = q;
+  state.propertiesSearch = q;
+  state.agentsSearch = q;
+  document.getElementById('tasks-search').value = q;
+  document.getElementById('properties-search').value = q;
+  document.getElementById('agents-search').value = q;
+  const qLower = q.trim().toLowerCase();
+  if (!qLower) state.recapMatchIds = null;
+  renderTasksSection();
+  renderPropertiesSection();
+  renderAgents();
+  fetchRecapMatches(qLower);
+});
+
+// ---- Overview: attention tabs + rows ----
+document.getElementById('overview-attention-tabs').addEventListener('click', (e) => {
+  const btn = e.target.closest('.attention-tab');
+  if (!btn) return;
+  state.attentionTab = btn.dataset.tab;
+  renderAttentionTabs();
+  renderAttentionRows();
+});
+document.getElementById('overview-attention-content').addEventListener('click', (e) => {
+  const row = e.target.closest('.attention-row');
+  if (!row || !row.dataset.propertyId) return;
+  openPropertyDetail(row.dataset.propertyId);
+});
+
+// ---- Overview: pipeline column "+" add-property buttons ----
+document.getElementById('overview-pipeline-board').addEventListener('click', (e) => {
+  const btn = e.target.closest('.column-add-btn');
+  if (!btn) return;
+  document.getElementById('property-form').reset();
+  const stageField = document.querySelector('#property-form [name="stage"]');
+  if (stageField && btn.dataset.addStage) stageField.value = btn.dataset.addStage;
+  openModal('property-modal-overlay');
+});
+
+// ---- "View All" / panel links that jump to another nav section ----
+document.querySelectorAll('[data-nav]').forEach(el => {
+  el.addEventListener('click', (e) => {
+    e.preventDefault();
+    const section = el.dataset.nav;
+    document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.section === section));
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    const target = document.getElementById(section);
+    if (target) target.classList.add('active');
+  });
+});
 
 document.querySelectorAll('#properties-table th[data-sort]').forEach(th => {
   th.addEventListener('click', () => {
