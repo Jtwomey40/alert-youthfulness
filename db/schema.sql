@@ -87,3 +87,8 @@ CREATE TABLE IF NOT EXISTS stage_history (
 
 CREATE INDEX IF NOT EXISTS idx_stage_history_property ON stage_history(property_id);
 CREATE INDEX IF NOT EXISTS idx_stage_history_changed_at ON stage_history(changed_at);
+
+-- Timestamp for "I've called them" checkbox on a property's card, shown while a property
+-- is in the 'Offers ready' stage. Reset to NULL automatically whenever stage changes
+-- (see PATCH /api/properties/:id) so a future visit to 'Offers ready' starts unchecked.
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS called_at TIMESTAMPTZ;

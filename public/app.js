@@ -163,6 +163,47 @@ function renderActivityList(container, items, limit) {
   }).join('');
 }
 
+// ---- Shared property card template ----
+// Properties in the "Offers ready" stage get a "Called" checkbox. Checking it stamps
+// called_at on the backend and — per how this is used — the card should drop out of
+// the Offers ready board column right away, so callers filter those out before
+// passing items into renderBoard (see renderOverview / renderPropertiesSection).
+function propertyCardHtml(p, opts) {
+  opts = opts || {};
+  const linkable = opts.linkable !== false;
+  const showCalledCheckbox = p.stage === 'Offers ready';
+  const checkbox = showCalledCheckbox
+    ? `<label class="called-checkbox-label">
+        <input type="checkbox" class="called-checkbox" data-id="${p.id}" ${p.called_at ? 'checked' : ''}>
+        I've called them
+      </label>`
+    : '';
+  return `<div class="card${linkable ? ' property-link' : ''}" data-id="${p.id}">
+      <div class="title">${escapeHtml(p.address)}</div>
+      <div class="meta">${escapeHtml(p.agent_name || 'No agent on file')}</div>
+      ${checkbox}
+    </div>`;
+}
+
+// Optimistically hides the card and persists the "called" timestamp; reverts and
+// shows an error if the save fails.
+async function toggleCalledAt(id, checked) {
+  const idx = state.properties.findIndex(p => String(p.id) === String(id));
+  const previous = idx !== -1 ? state.properties[idx].called_at : undefined;
+  if (idx !== -1) state.properties[idx].called_at = checked ? new Date().toISOString() : null;
+  renderOverview();
+  renderPropertiesSection();
+  try {
+    const updated = await patchJSON(`/api/properties/${id}`, { called_at: checked ? new Date().toISOString() : null });
+    if (idx !== -1) state.properties[idx] = updated;
+  } catch (err) {
+    if (idx !== -1) state.properties[idx].called_at = previous;
+    showError('Could not save that: ' + err.message);
+    renderOverview();
+    renderPropertiesSection();
+  }
+}
+
 // ---- Overview ----
 function renderOverview() {
   renderAttention(document.getElementById('overview-attention-content'), state.attention, { compact: true });
@@ -180,14 +221,16 @@ function renderOverview() {
       <td>${statusTag(t.status)}</td>
     </tr>`).join('') : `<tr><td colspan="5" class="muted">Nothing due today or overdue.</td></tr>`;
 
-  const active = state.properties.filter(p => p.stage !== 'Not in DealioDesk');
+  const active = state.properties.filter(p =>
+    p.stage !== 'Not in DealioDesk' && !(p.stage === 'Offers ready' && p.called_at)
+  );
   renderBoard(
     document.getElementById('overview-pipeline-board'),
     active,
     p => p.stage,
     STAGE_ORDER.filter(s => s !== 'Not in DealioDesk'),
     s => s,
-    p => `<div class="card"><div class="title">${escapeHtml(p.address)}</div><div class="meta">${escapeHtml(p.agent_name || 'No agent on file')}</div></div>`
+    p => propertyCardHtml(p, { linkable: false })
   );
 
   renderActivityList(document.getElementById('overview-activity-list'), state.activity, 8);
@@ -312,13 +355,14 @@ function renderPropertiesSection() {
       <td>${p.deal_url ? `<a href="${escapeHtml(p.deal_url)}" target="_blank" rel="noopener">Open</a>` : ''}</td>
     </tr>`).join('') : `<tr><td colspan="5" class="muted">No properties match.</td></tr>`;
 
+  const boardItems = items.filter(p => !(p.stage === 'Offers ready' && p.called_at));
   renderBoard(
     document.getElementById('properties-board-view'),
-    items,
+    boardItems,
     p => p.stage,
     STAGE_ORDER,
     s => s,
-    p => `<div class="card property-link" data-id="${p.id}"><div class="title">${escapeHtml(p.address)}</div><div class="meta">${escapeHtml(p.agent_name || 'No agent on file')}</div></div>`
+    p => propertyCardHtml(p)
   );
 
   updateSortIndicators('properties-table', state.propertiesSort);
@@ -533,10 +577,20 @@ document.querySelector('#properties-table tbody').addEventListener('click', (e) 
   openPropertyDetail(link.dataset.id);
 });
 document.getElementById('properties-board-view').addEventListener('click', (e) => {
+  if (e.target.closest('.called-checkbox-label')) return;
   const card = e.target.closest('.property-link');
   if (!card) return;
   openPropertyDetail(card.dataset.id);
 });
+
+// ---- "I've called them" checkbox (Offers ready property cards) ----
+function handleCalledCheckboxChange(e) {
+  const el = e.target;
+  if (!el.matches('.called-checkbox')) return;
+  toggleCalledAt(el.dataset.id, el.checked);
+}
+document.getElementById('overview-pipeline-board').addEventListener('change', handleCalledCheckboxChange);
+document.getElementById('properties-board-view').addEventListener('change', handleCalledCheckboxChange);
 
 // ---- Tasks table: inline edit, select, calendar export ----
 document.querySelector('#tasks-table tbody').addEventListener('change', async (e) => {

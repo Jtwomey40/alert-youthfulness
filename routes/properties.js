@@ -73,7 +73,7 @@ router.post('/', asyncHandler(async (req, res) => {
 // If `stage` is changing, logs the transition to stage_history for the activity feed / insights.
 router.patch('/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const fields = ['address', 'stage', 'deal_url', 'agent_name', 'agent_phone', 'agent_email', 'legacy_key'];
+  const fields = ['address', 'stage', 'deal_url', 'agent_name', 'agent_phone', 'agent_email', 'legacy_key', 'called_at'];
   const sets = [];
   const values = [];
   for (const f of fields) {
@@ -89,6 +89,12 @@ router.patch('/:id', asyncHandler(async (req, res) => {
     const current = await pool.query('SELECT stage FROM properties WHERE id = $1', [id]);
     if (!current.rows.length) return res.status(404).json({ error: 'not found' });
     previousStage = current.rows[0].stage;
+    // Changing stage resets the "called them" checkbox, unless this same request
+    // is explicitly setting called_at itself.
+    if (req.body.called_at === undefined && req.body.stage !== previousStage) {
+      values.push(null);
+      sets.push(`called_at = $${values.length}`);
+    }
   }
 
   values.push(id);
