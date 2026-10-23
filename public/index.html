@@ -12,6 +12,7 @@
   <div class="sidebar-logo"><span class="logo-badge">Z</span> Zoodealio</div>
   <nav class="sidebar-nav">
     <button data-section="overview" class="active"><span class="nav-icon">&#8962;</span> Overview</button>
+    <button data-section="pipeline"><span class="nav-icon">&#128188;</span> Pipeline</button>
     <button data-section="tasks"><span class="nav-icon">&#9776;</span> Tasks <span class="nav-badge" id="nav-tasks-badge" style="display:none;"></span></button>
     <button data-section="properties"><span class="nav-icon">&#8962;</span> Properties</button>
     <button data-section="agents"><span class="nav-icon">&#128100;</span> Agents</button>
@@ -71,19 +72,22 @@
     </div>
 
     <div class="panel">
+      <h2>Recent Activity</h2>
+      <ul class="activity-list" id="overview-activity-list"></ul>
+    </div>
+  </section>
+
+  <section id="pipeline" class="section">
+    <div class="panel">
       <div class="toolbar">
         <h2 style="margin:0;">Deal Pipeline</h2>
         <div class="spacer"></div>
-        <div class="scope-toggle" id="overview-scope-toggle">
+        <div class="scope-toggle" id="pipeline-scope-toggle">
           <button data-scope="mine" class="active">Mine</button>
           <button data-scope="everyone">Everyone</button>
         </div>
       </div>
-      <div class="board pipeline-board" id="overview-pipeline-board"></div>
-    </div>
-    <div class="panel">
-      <h2>Recent Activity</h2>
-      <ul class="activity-list" id="overview-activity-list"></ul>
+      <div class="board pipeline-board" id="pipeline-board"></div>
     </div>
   </section>
 

@@ -132,6 +132,7 @@ async function loadAll() {
 
 function renderAll() {
   renderOverview();
+  renderPipeline();
   renderTasksSection();
   renderPropertiesSection();
   renderAgents();
@@ -245,6 +246,7 @@ async function toggleCalledAt(id, checked) {
   const previous = idx !== -1 ? state.properties[idx].called_at : undefined;
   if (idx !== -1) state.properties[idx].called_at = checked ? new Date().toISOString() : null;
   renderOverview();
+  renderPipeline();
   renderPropertiesSection();
   try {
     const updated = await patchJSON(`/api/properties/${id}`, { called_at: checked ? new Date().toISOString() : null });
@@ -253,6 +255,7 @@ async function toggleCalledAt(id, checked) {
     if (idx !== -1) state.properties[idx].called_at = previous;
     showError('Could not save that: ' + err.message);
     renderOverview();
+    renderPipeline();
     renderPropertiesSection();
   }
 }
@@ -263,6 +266,7 @@ async function toggleCalledAt(id, checked) {
 async function handleNotEnoughEquity(id) {
   if (!window.confirm('Archive this property? It will be hidden from the dashboard but can be restored later from Archived Properties.')) {
     renderOverview();
+    renderPipeline();
     renderPropertiesSection();
     return;
   }
@@ -430,13 +434,18 @@ function renderOverview() {
   renderTimeline();
   updateNavBadge();
 
+  renderActivityList(document.getElementById('overview-activity-list'), state.activity, 8);
+}
+
+// ---- Pipeline (its own page) ----
+function renderPipeline() {
   const active = state.properties.filter(p =>
     p.stage !== 'Not in DealioDesk' &&
     !(p.stage === 'Offers ready' && p.called_at) &&
     (state.ownershipScope !== 'mine' || p.assigned_to_me)
   );
   renderBoard(
-    document.getElementById('overview-pipeline-board'),
+    document.getElementById('pipeline-board'),
     active,
     p => p.stage,
     STAGE_ORDER.filter(s => s !== 'Not in DealioDesk'),
@@ -444,8 +453,6 @@ function renderOverview() {
     p => propertyCardHtml(p, { linkable: false }),
     { columnClass: stageSlug, addButton: true }
   );
-
-  renderActivityList(document.getElementById('overview-activity-list'), state.activity, 8);
 }
 
 // ---- Tasks ----
@@ -864,7 +871,7 @@ function handleCalledCheckboxChange(e) {
     handleNotEnoughEquity(el.dataset.id);
   }
 }
-document.getElementById('overview-pipeline-board').addEventListener('change', handleCalledCheckboxChange);
+document.getElementById('pipeline-board').addEventListener('change', handleCalledCheckboxChange);
 document.getElementById('properties-board-view').addEventListener('change', handleCalledCheckboxChange);
 
 // ---- Tasks table: inline edit, select, calendar export ----
@@ -983,8 +990,8 @@ document.getElementById('overview-attention-content').addEventListener('click', 
   openPropertyDetail(row.dataset.propertyId);
 });
 
-// ---- Overview: pipeline column "+" add-property buttons ----
-document.getElementById('overview-pipeline-board').addEventListener('click', (e) => {
+// ---- Pipeline: column "+" add-property buttons ----
+document.getElementById('pipeline-board').addEventListener('click', (e) => {
   const btn = e.target.closest('.column-add-btn');
   if (!btn) return;
   document.getElementById('property-form').reset();
@@ -1047,6 +1054,7 @@ document.querySelectorAll('.scope-toggle').forEach(toggle => {
       b.classList.toggle('active', b.dataset.scope === state.ownershipScope);
     });
     renderOverview();
+    renderPipeline();
     renderPropertiesSection();
   });
 });
