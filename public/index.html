@@ -9,39 +9,109 @@
 <body>
 <header>
   <h1>Zoodealio <span>Dashboard</span></h1>
+  <div class="header-actions">
+    <span id="refresh-status" class="refresh-status">Loading…</span>
+    <button id="refresh-btn" class="icon-btn" title="Refresh now">&#x21bb; Refresh</button>
+  </div>
 </header>
 <nav>
   <button data-section="overview" class="active">Overview</button>
   <button data-section="tasks">Tasks</button>
   <button data-section="properties">Properties</button>
+  <button data-section="agents">Agents</button>
+  <button data-section="insights">Insights</button>
 </nav>
+
+<div id="error-banner" class="error-banner" style="display:none;">
+  <span id="error-banner-text"></span>
+  <button id="error-banner-retry">Retry</button>
+  <button id="error-banner-dismiss">&times;</button>
+</div>
+
 <main>
 
   <section id="overview" class="section active">
+    <div class="panel" id="overview-attention-panel">
+      <h2>Needs Attention</h2>
+      <div id="overview-attention-content"><p class="muted">Loading…</p></div>
+    </div>
     <div class="panel">
       <h2>Due Today &amp; Overdue</h2>
-      <table id="overview-tasks-table">
-        <thead><tr><th>Title</th><th>Priority</th><th>Due</th><th>Project</th><th>Status</th></tr></thead>
-        <tbody></tbody>
-      </table>
+      <div class="table-scroll">
+        <table id="overview-tasks-table">
+          <thead><tr><th>Title</th><th>Priority</th><th>Due</th><th>Project</th><th>Status</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </div>
     <div class="panel">
       <h2>Deal Pipeline</h2>
       <div class="board" id="overview-pipeline-board"></div>
     </div>
+    <div class="panel">
+      <h2>Recent Activity</h2>
+      <ul class="activity-list" id="overview-activity-list"></ul>
+    </div>
   </section>
 
   <section id="tasks" class="section">
     <div class="panel">
+      <div class="toolbar">
+        <input type="search" id="tasks-search" placeholder="Search tasks…">
+        <select id="tasks-filter-status">
+          <option value="">All statuses</option>
+          <option value="todo">To do</option>
+          <option value="in_progress">In progress</option>
+          <option value="done">Done</option>
+        </select>
+        <select id="tasks-filter-priority">
+          <option value="">All priorities</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+        <div class="spacer"></div>
+        <button id="add-task-btn" class="primary-btn">+ Add Task</button>
+      </div>
+      <div class="bulk-bar" id="tasks-bulk-bar" style="display:none;">
+        <span id="tasks-bulk-count"></span>
+        <select id="tasks-bulk-status">
+          <option value="">Set status…</option>
+          <option value="todo">To do</option>
+          <option value="in_progress">In progress</option>
+          <option value="done">Done</option>
+        </select>
+        <select id="tasks-bulk-priority">
+          <option value="">Set priority…</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+        <button id="tasks-bulk-apply">Apply</button>
+        <button id="tasks-bulk-clear">Clear selection</button>
+      </div>
       <div class="view-toggle">
         <button data-view="table" class="active">Table</button>
         <button data-view="board">Board</button>
       </div>
       <div id="tasks-table-view">
-        <table id="tasks-table">
-          <thead><tr><th>Title</th><th>Status</th><th>Priority</th><th>Due</th><th>Project</th><th>Source</th></tr></thead>
-          <tbody></tbody>
-        </table>
+        <div class="table-scroll">
+          <table id="tasks-table">
+            <thead>
+              <tr>
+                <th class="checkbox-col"><input type="checkbox" id="tasks-select-all"></th>
+                <th data-sort="title">Title</th>
+                <th data-sort="status">Status</th>
+                <th data-sort="priority">Priority</th>
+                <th data-sort="due">Due</th>
+                <th data-sort="project">Project</th>
+                <th data-sort="source">Source</th>
+                <th>Calendar</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
       <div id="tasks-board-view" class="board" style="display:none;"></div>
     </div>
@@ -49,21 +119,196 @@
 
   <section id="properties" class="section">
     <div class="panel">
+      <div class="toolbar">
+        <input type="search" id="properties-search" placeholder="Search properties…">
+        <select id="properties-filter-stage">
+          <option value="">All stages</option>
+          <option value="Intake">Intake</option>
+          <option value="Offer requested">Offer requested</option>
+          <option value="Offers ready">Offers ready</option>
+          <option value="Offer selected">Offer selected</option>
+          <option value="Not in DealioDesk">Not in DealioDesk</option>
+        </select>
+        <div class="spacer"></div>
+        <button id="add-property-btn" class="primary-btn">+ Add Property</button>
+      </div>
       <div class="view-toggle">
         <button data-view="table" class="active">Table</button>
         <button data-view="board">Board</button>
       </div>
       <div id="properties-table-view">
-        <table id="properties-table">
-          <thead><tr><th>Address</th><th>Stage</th><th>Agent</th><th>Deal</th></tr></thead>
-          <tbody></tbody>
-        </table>
+        <div class="table-scroll">
+          <table id="properties-table">
+            <thead>
+              <tr>
+                <th data-sort="address">Address</th>
+                <th data-sort="stage">Stage</th>
+                <th data-sort="agent_name">Agent</th>
+                <th data-sort="last_recap_date">Last Recap</th>
+                <th>Deal</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
       <div id="properties-board-view" class="board" style="display:none;"></div>
     </div>
   </section>
 
+  <section id="agents" class="section">
+    <div class="panel">
+      <h2>Agent Directory</h2>
+      <p class="muted">Every agent on file, pulled from property records.</p>
+      <div class="table-scroll">
+        <table id="agents-table">
+          <thead><tr><th>Agent</th><th>Email</th><th>Phone</th><th>Properties</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="insights" class="section">
+    <div class="panel">
+      <h2>This Week / Month</h2>
+      <div class="stats-cards" id="insights-stats-cards"></div>
+    </div>
+    <div class="panel">
+      <h2>Avg Days per Stage</h2>
+      <p class="muted" id="insights-avg-stage-note"></p>
+      <div class="table-scroll">
+        <table id="insights-avg-stage-table">
+          <thead><tr><th>Stage</th><th>Avg Days</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Needs Attention (full list)</h2>
+      <div id="insights-attention-content"></div>
+    </div>
+    <div class="panel">
+      <h2>Activity Feed</h2>
+      <ul class="activity-list" id="insights-activity-list"></ul>
+    </div>
+  </section>
+
 </main>
+
+<!-- Add Task modal -->
+<div class="modal-overlay" id="task-modal-overlay" style="display:none;">
+  <div class="modal">
+    <h3>Add Task</h3>
+    <form id="task-form">
+      <label>Title<input type="text" name="title" required></label>
+      <label>Priority
+        <select name="priority">
+          <option value="medium" selected>Medium</option>
+          <option value="high">High</option>
+          <option value="low">Low</option>
+        </select>
+      </label>
+      <label>Due<input type="date" name="due"></label>
+      <label>Project / Address<input type="text" name="project"></label>
+      <div class="modal-actions">
+        <button type="button" class="secondary-btn" data-close-modal="task-modal-overlay">Cancel</button>
+        <button type="submit" class="primary-btn">Add Task</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Add Property modal -->
+<div class="modal-overlay" id="property-modal-overlay" style="display:none;">
+  <div class="modal">
+    <h3>Add Property</h3>
+    <form id="property-form">
+      <label>Address<input type="text" name="address" required></label>
+      <label>Stage
+        <select name="stage">
+          <option value="Intake" selected>Intake</option>
+          <option value="Offer requested">Offer requested</option>
+          <option value="Offers ready">Offers ready</option>
+          <option value="Offer selected">Offer selected</option>
+          <option value="Not in DealioDesk">Not in DealioDesk</option>
+        </select>
+      </label>
+      <label>Deal URL<input type="url" name="deal_url"></label>
+      <label>Agent Name<input type="text" name="agent_name"></label>
+      <label>Agent Phone<input type="text" name="agent_phone"></label>
+      <label>Agent Email<input type="email" name="agent_email"></label>
+      <div class="modal-actions">
+        <button type="button" class="secondary-btn" data-close-modal="property-modal-overlay">Cancel</button>
+        <button type="submit" class="primary-btn">Add Property</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Log a Call modal -->
+<div class="modal-overlay" id="log-call-modal-overlay" style="display:none;">
+  <div class="modal">
+    <h3>Log a Call <span id="log-call-property-label" class="muted"></span></h3>
+    <form id="log-call-form">
+      <input type="hidden" name="property_id">
+      <label>Meeting Title<input type="text" name="meeting_title" required placeholder="e.g. Intro call with agent"></label>
+      <label>Meeting Date<input type="date" name="meeting_date" required></label>
+      <label>Summary<textarea name="summary" rows="3" required placeholder="What was discussed / decided"></textarea></label>
+      <div class="follow-up-tasks">
+        <div class="follow-up-tasks-header">
+          <strong>Follow-up tasks</strong>
+          <button type="button" id="log-call-add-task-row" class="secondary-btn small">+ Add task</button>
+        </div>
+        <div id="log-call-task-rows"></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="secondary-btn" data-close-modal="log-call-modal-overlay">Cancel</button>
+        <button type="submit" class="primary-btn">Save Recap</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Property detail (recap viewer + inline edit) -->
+<div class="modal-overlay" id="property-detail-modal-overlay" style="display:none;">
+  <div class="modal modal-wide">
+    <h3 id="property-detail-address"></h3>
+    <div class="property-detail-grid">
+      <div>
+        <h4>Details</h4>
+        <form id="property-detail-form">
+          <input type="hidden" name="id">
+          <label>Stage
+            <select name="stage">
+              <option value="Intake">Intake</option>
+              <option value="Offer requested">Offer requested</option>
+              <option value="Offers ready">Offers ready</option>
+              <option value="Offer selected">Offer selected</option>
+              <option value="Not in DealioDesk">Not in DealioDesk</option>
+            </select>
+          </label>
+          <label>Deal URL<input type="url" name="deal_url"></label>
+          <label>Agent Name<input type="text" name="agent_name"></label>
+          <label>Agent Phone<input type="text" name="agent_phone"></label>
+          <label>Agent Email<input type="email" name="agent_email"></label>
+          <div class="modal-actions">
+            <button type="button" class="secondary-btn" id="property-detail-log-call-btn">Log a call</button>
+            <button type="submit" class="primary-btn">Save</button>
+          </div>
+        </form>
+      </div>
+      <div>
+        <h4>Call Recaps</h4>
+        <div id="property-detail-recaps" class="recap-list"></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="secondary-btn" data-close-modal="property-detail-modal-overlay">Close</button>
+    </div>
+  </div>
+</div>
+
 <script src="app.js"></script>
 </body>
 </html>

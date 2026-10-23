@@ -49,3 +49,41 @@ CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_due ON tasks(due);
 CREATE INDEX IF NOT EXISTS idx_tasks_property ON tasks(property_id);
 CREATE INDEX IF NOT EXISTS idx_properties_stage ON properties(stage);
+
+-- --- Additive changes below (safe to re-run) ---
+
+-- Link a task back to the specific call recap it was generated from, for traceability.
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recap_id INTEGER REFERENCES call_recaps(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_tasks_recap ON tasks(recap_id);
+
+-- Allow a 'manual' task source (created by Jeremy logging a call from the dashboard UI),
+-- in addition to the existing 'dealiodesk' and 'auto' sources. Looks up the existing check
+-- constraint on tasks.source by introspection (rather than assuming its auto-generated name)
+-- so this is safe to re-run no matter how it was originally named.
+DO $$
+DECLARE
+  con RECORD;
+BEGIN
+  FOR con IN
+    SELECT conname FROM pg_constraint
+    WHERE conrelid = 'tasks'::regclass
+      AND contype = 'c'
+      AND pg_get_constraintdef(oid) ILIKE '%source%'
+  LOOP
+    EXECUTE format('ALTER TABLE tasks DROP CONSTRAINT %I', con.conname);
+  END LOOP;
+END $$;
+ALTER TABLE tasks ADD CONSTRAINT tasks_source_check CHECK (source IN ('dealiodesk', 'auto', 'manual'));
+
+-- Records every stage transition so the dashboard can show an activity feed and
+-- compute average time-in-stage. Populated going forward by the PATCH /api/properties/:id route.
+CREATE TABLE IF NOT EXISTS stage_history (
+  id              SERIAL PRIMARY KEY,
+  property_id     INTEGER NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
+  from_stage      TEXT,
+  to_stage        TEXT NOT NULL,
+  changed_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_stage_history_property ON stage_history(property_id);
+CREATE INDEX IF NOT EXISTS idx_stage_history_changed_at ON stage_history(changed_at);

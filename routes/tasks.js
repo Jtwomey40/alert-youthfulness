@@ -31,15 +31,15 @@ router.get('/:id', asyncHandler(async (req, res) => {
 router.post('/', asyncHandler(async (req, res) => {
   const {
     title, status, priority, due, project, property_id,
-    source, dealio_task_id, dealio_task_type, legacy_id, steps
+    source, dealio_task_id, dealio_task_type, legacy_id, steps, recap_id
   } = req.body;
   if (!title) return res.status(400).json({ error: 'title is required' });
   try {
     const { rows } = await pool.query(
-      `INSERT INTO tasks (title, status, priority, due, project, property_id, source, dealio_task_id, dealio_task_type, legacy_id, steps)
-       VALUES ($1, COALESCE($2,'todo'), COALESCE($3,'medium'), $4, $5, $6, COALESCE($7,'auto'), $8, $9, $10, COALESCE($11,'[]'::jsonb))
+      `INSERT INTO tasks (title, status, priority, due, project, property_id, source, dealio_task_id, dealio_task_type, legacy_id, steps, recap_id)
+       VALUES ($1, COALESCE($2,'todo'), COALESCE($3,'medium'), $4, $5, $6, COALESCE($7,'auto'), $8, $9, $10, COALESCE($11,'[]'::jsonb), $12)
        RETURNING *`,
-      [title, status, priority, due, project, property_id, source, dealio_task_id, dealio_task_type, legacy_id, JSON.stringify(steps || [])]
+      [title, status, priority, due, project, property_id, source, dealio_task_id, dealio_task_type, legacy_id, JSON.stringify(steps || []), recap_id || null]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -48,10 +48,34 @@ router.post('/', asyncHandler(async (req, res) => {
   }
 }));
 
+// Bulk update — PATCH /api/tasks/bulk { ids: [1,2,3], ...fields } applies the same field
+// changes to every id in one request (used by the dashboard's multi-select bulk actions).
+router.patch('/bulk', asyncHandler(async (req, res) => {
+  const { ids, ...updates } = req.body;
+  if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids array is required' });
+  const fields = ['status', 'priority', 'due', 'project'];
+  const sets = [];
+  const values = [];
+  for (const f of fields) {
+    if (updates[f] !== undefined) {
+      values.push(updates[f]);
+      sets.push(`${f} = $${values.length}`);
+    }
+  }
+  if (!sets.length) return res.status(400).json({ error: 'no fields to update' });
+  if (updates.status === 'done') sets.push('completed_at = now()');
+  values.push(ids);
+  const { rows } = await pool.query(
+    `UPDATE tasks SET ${sets.join(', ')} WHERE id = ANY($${values.length}::int[]) RETURNING *`,
+    values
+  );
+  res.json(rows);
+}));
+
 // PATCH /api/tasks/:id — partial update; setting status to 'done' auto-stamps completed_at unless provided
 router.patch('/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const fields = ['title', 'status', 'priority', 'due', 'project', 'property_id', 'source', 'dealio_task_id', 'dealio_task_type', 'legacy_id', 'steps', 'completed_at'];
+  const fields = ['title', 'status', 'priority', 'due', 'project', 'property_id', 'source', 'dealio_task_id', 'dealio_task_type', 'legacy_id', 'steps', 'completed_at', 'recap_id'];
   const sets = [];
   const values = [];
   for (const f of fields) {
