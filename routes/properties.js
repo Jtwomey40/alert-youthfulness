@@ -114,6 +114,16 @@ router.patch('/:id', asyncHandler(async (req, res) => {
   res.json(rows[0]);
 }));
 
+// DELETE /api/properties/:id — permanently removes the property (e.g. "not enough equity").
+// call_recaps and stage_history cascade-delete; tasks keep their row but property_id is set
+// to NULL (see schema), so nothing else breaks.
+router.delete('/:id', asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { rows } = await pool.query('DELETE FROM properties WHERE id = $1 RETURNING id', [id]);
+  if (!rows.length) return res.status(404).json({ error: 'not found' });
+  res.status(204).end();
+}));
+
 // POST /api/properties/:id/recaps — add a call recap, dedup by title+date
 router.post('/:id/recaps', asyncHandler(async (req, res) => {
   const { id } = req.params;

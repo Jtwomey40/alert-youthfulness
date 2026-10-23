@@ -194,25 +194,35 @@ td input.inline-edit:focus {
 .card .title { font-weight: 600; margin-bottom: 4px; }
 .card .meta { color: var(--gray); font-size: 12px; }
 
-.called-checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.card-checkboxes {
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.called-checkbox-label,
+.equity-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   font-weight: 600;
   color: var(--gray);
   cursor: pointer;
 }
 .called-checkbox-label:hover { color: var(--magenta); }
-.called-checkbox-label input[type="checkbox"] {
+.equity-checkbox-label:hover { color: var(--amber); }
+.called-checkbox-label input[type="checkbox"],
+.equity-checkbox-label input[type="checkbox"] {
   width: 15px;
   height: 15px;
   cursor: pointer;
   accent-color: var(--magenta);
 }
+.equity-checkbox-label input[type="checkbox"] { accent-color: var(--amber); }
 
 .view-toggle { display: flex; gap: 8px; margin-bottom: 14px; }
 .view-toggle button {

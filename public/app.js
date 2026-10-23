@@ -164,24 +164,30 @@ function renderActivityList(container, items, limit) {
 }
 
 // ---- Shared property card template ----
-// Properties in the "Offers ready" stage get a "Called" checkbox. Checking it stamps
-// called_at on the backend and — per how this is used — the card should drop out of
-// the Offers ready board column right away, so callers filter those out before
-// passing items into renderBoard (see renderOverview / renderPropertiesSection).
+// Properties in the "Offers ready" stage get two checkboxes:
+//   - "I've called them" stamps called_at and the card drops out of the Offers ready
+//     board column right away (see renderOverview / renderPropertiesSection filters).
+//   - "Not enough equity" permanently deletes the property after a confirm prompt.
 function propertyCardHtml(p, opts) {
   opts = opts || {};
   const linkable = opts.linkable !== false;
-  const showCalledCheckbox = p.stage === 'Offers ready';
-  const checkbox = showCalledCheckbox
-    ? `<label class="called-checkbox-label">
-        <input type="checkbox" class="called-checkbox" data-id="${p.id}" ${p.called_at ? 'checked' : ''}>
-        I've called them
-      </label>`
+  const showOfferCheckboxes = p.stage === 'Offers ready';
+  const checkboxes = showOfferCheckboxes
+    ? `<div class="card-checkboxes">
+        <label class="called-checkbox-label">
+          <input type="checkbox" class="called-checkbox" data-id="${p.id}" ${p.called_at ? 'checked' : ''}>
+          I've called them
+        </label>
+        <label class="equity-checkbox-label">
+          <input type="checkbox" class="equity-checkbox" data-id="${p.id}">
+          Not enough equity
+        </label>
+      </div>`
     : '';
   return `<div class="card${linkable ? ' property-link' : ''}" data-id="${p.id}">
       <div class="title">${escapeHtml(p.address)}</div>
       <div class="meta">${escapeHtml(p.agent_name || 'No agent on file')}</div>
-      ${checkbox}
+      ${checkboxes}
     </div>`;
 }
 
@@ -201,6 +207,27 @@ async function toggleCalledAt(id, checked) {
     showError('Could not save that: ' + err.message);
     renderOverview();
     renderPropertiesSection();
+  }
+}
+
+// "Not enough equity" — permanently removes the property. Confirms first since this
+// can't be undone; re-renders either way so the checkbox doesn't stay visually checked.
+async function handleNotEnoughEquity(id) {
+  if (!window.confirm('Delete this property? This cannot be undone.')) {
+    renderOverview();
+    renderPropertiesSection();
+    return;
+  }
+  const idx = state.properties.findIndex(p => String(p.id) === String(id));
+  const removed = idx !== -1 ? state.properties[idx] : null;
+  if (idx !== -1) state.properties.splice(idx, 1);
+  renderAll();
+  try {
+    await apiFetch(`/api/properties/${id}`, { method: 'DELETE' });
+  } catch (err) {
+    if (removed) state.properties.splice(idx, 0, removed);
+    showError('Could not delete property: ' + err.message);
+    renderAll();
   }
 }
 
@@ -577,17 +604,20 @@ document.querySelector('#properties-table tbody').addEventListener('click', (e) 
   openPropertyDetail(link.dataset.id);
 });
 document.getElementById('properties-board-view').addEventListener('click', (e) => {
-  if (e.target.closest('.called-checkbox-label')) return;
+  if (e.target.closest('.card-checkboxes')) return;
   const card = e.target.closest('.property-link');
   if (!card) return;
   openPropertyDetail(card.dataset.id);
 });
 
-// ---- "I've called them" checkbox (Offers ready property cards) ----
+// ---- Offers ready card checkboxes ("I've called them" / "Not enough equity") ----
 function handleCalledCheckboxChange(e) {
   const el = e.target;
-  if (!el.matches('.called-checkbox')) return;
-  toggleCalledAt(el.dataset.id, el.checked);
+  if (el.matches('.called-checkbox')) {
+    toggleCalledAt(el.dataset.id, el.checked);
+  } else if (el.matches('.equity-checkbox') && el.checked) {
+    handleNotEnoughEquity(el.dataset.id);
+  }
 }
 document.getElementById('overview-pipeline-board').addEventListener('change', handleCalledCheckboxChange);
 document.getElementById('properties-board-view').addEventListener('change', handleCalledCheckboxChange);
