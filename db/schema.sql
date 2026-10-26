@@ -121,3 +121,46 @@ CREATE TABLE IF NOT EXISTS property_edits (
 );
 
 CREATE INDEX IF NOT EXISTS idx_property_edits_property ON property_edits(property_id);
+
+-- Expand properties.stage from the original 5 hand-picked values to DealioDesk's full
+-- coarse stage list, so the full-pipeline sync (dealiodesk-full-pipeline-sync) can store
+-- every one of Jeremy's real deals in its real stage instead of dropping/misfiling
+-- anything outside the original Intake/Offer requested/Offers ready/Offer selected set.
+-- Looks up the existing CHECK constraint by introspection so this is safe to re-run.
+DO $$
+DECLARE
+  con RECORD;
+BEGIN
+  FOR con IN
+    SELECT conname FROM pg_constraint
+    WHERE conrelid = 'properties'::regclass
+      AND contype = 'c'
+      AND pg_get_constraintdef(oid) ILIKE '%stage%'
+  LOOP
+    EXECUTE format('ALTER TABLE properties DROP CONSTRAINT %I', con.conname);
+  END LOOP;
+END $$;
+ALTER TABLE properties ADD CONSTRAINT properties_stage_check CHECK (stage IN (
+  'Intake','Estimates available','Offer requested','Offers ready','Offer selected',
+  'Under contract','Closing','Renovation','Resale','Disposition','Not in DealioDesk'
+));
+
+-- DealioDesk's finer board lane within a coarse stage (e.g. "Details Shared", "Comping
+-- Complete", "Comping Viewed", "Agent disputed comps", "Estimated Offer Available") —
+-- free text rather than a CHECK list since DealioDesk's own lane catalog can change.
+-- Nullable: only populated for properties touched by the full-pipeline sync. This is what
+-- surfaces Jeremy's "70 Details Shared" count, which has no equivalent in the coarse stage.
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS dealio_stage TEXT;
+CREATE INDEX IF NOT EXISTS idx_properties_dealio_stage ON properties(dealio_stage);
+
+-- Stable DealioDesk-side identifiers for the full-pipeline sync to upsert against, independent
+-- of legacy_key's address-slug convention (two deals can share an address slug; DealioDesk's
+-- own ids can't collide). dealio_deal_id = DealioDesk's transactionId; dealio_property_id =
+-- DealioDesk's propertyId, kept alongside for reference. Both nullable: only set by the sync.
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS dealio_deal_id TEXT UNIQUE;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS dealio_property_id TEXT;
+CREATE INDEX IF NOT EXISTS idx_properties_dealio_deal_id ON properties(dealio_deal_id);
+
+-- When the full-pipeline sync last touched this property, so the sync's own reconcile step
+-- (and the dashboard, if useful later) can tell freshly-synced rows from stale/manual ones.
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS dealio_synced_at TIMESTAMPTZ;

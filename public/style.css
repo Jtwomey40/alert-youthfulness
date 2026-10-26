@@ -330,12 +330,24 @@ main { padding: 24px 28px; }
 
 .pipeline-board .column.stage-intake { background: #eff6ff; }
 .pipeline-board .column.stage-intake h3 { color: #2563eb; }
+.pipeline-board .column.stage-estimates-available { background: #ecfeff; }
+.pipeline-board .column.stage-estimates-available h3 { color: #0e7490; }
 .pipeline-board .column.stage-offer-requested { background: #f5f3ff; }
 .pipeline-board .column.stage-offer-requested h3 { color: #7c3aed; }
 .pipeline-board .column.stage-offers-ready { background: #ecfdf3; }
 .pipeline-board .column.stage-offers-ready h3 { color: var(--green); }
 .pipeline-board .column.stage-offer-selected { background: #fde0ea; }
 .pipeline-board .column.stage-offer-selected h3 { color: var(--magenta); }
+.pipeline-board .column.stage-under-contract { background: #fffbeb; }
+.pipeline-board .column.stage-under-contract h3 { color: var(--amber); }
+.pipeline-board .column.stage-closing { background: #fff7ed; }
+.pipeline-board .column.stage-closing h3 { color: #c2410c; }
+.pipeline-board .column.stage-renovation { background: #fefce8; }
+.pipeline-board .column.stage-renovation h3 { color: #a16207; }
+.pipeline-board .column.stage-resale { background: #f0fdfa; }
+.pipeline-board .column.stage-resale h3 { color: #0f766e; }
+.pipeline-board .column.stage-disposition { background: #f1f5f9; }
+.pipeline-board .column.stage-disposition h3 { color: #475569; }
 .pipeline-board .column.stage-not-in-dealiodesk { background: #fafafa; }
 .pipeline-board .column.stage-not-in-dealiodesk h3 { color: var(--gray); }
 
@@ -506,6 +518,7 @@ td input.inline-edit:focus {
 .tag.not-mine { background: #f3f4f6; color: var(--gray); }
 .tag.mine { background: #ecfdf3; color: var(--green); }
 .tag.stale { background: #fff7ed; color: var(--amber); }
+.tag.dealio-stage { background: #ecfeff; color: #0e7490; }
 
 a { color: var(--magenta); }
 a.property-link { text-decoration: none; font-weight: 600; }

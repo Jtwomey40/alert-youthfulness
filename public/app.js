@@ -1,6 +1,9 @@
 // ---- Constants ----
 const STATUS_LABELS = { todo: 'To do', in_progress: 'In progress', done: 'Done' };
-const STAGE_ORDER = ['Intake', 'Offer requested', 'Offers ready', 'Offer selected', 'Not in DealioDesk'];
+const STAGE_ORDER = [
+  'Intake', 'Estimates available', 'Offer requested', 'Offers ready', 'Offer selected',
+  'Under contract', 'Closing', 'Renovation', 'Resale', 'Disposition', 'Not in DealioDesk'
+];
 const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 };
 const ATTENTION_TABS = [
   { key: 'stale_recaps', label: 'Stale / Missing Recaps' },
@@ -233,13 +236,14 @@ function propertyCardHtml(p, opts) {
     ? ''
     : '<span class="tag not-mine">Not yours</span>';
   const staleTag = state.staleIds.has(String(p.id)) ? '<span class="tag stale">Stale</span>' : '';
+  const dealioStageTag = p.dealio_stage ? `<span class="tag dealio-stage">${escapeHtml(p.dealio_stage)}</span>` : '';
   const valueMeta = p.deal_value ? `<div class="meta">${fmtMoney(p.deal_value)}</div>` : '';
   const agentHtml = p.agent_name
     ? `<div class="card-agent"><span class="agent-avatar">${escapeHtml(agentInitials(p.agent_name))}</span> ${escapeHtml(p.agent_name)}</div>`
     : `<div class="card-agent"><span class="agent-avatar none">&ndash;</span> No agent on file</div>`;
   return `<div class="card${linkable ? ' property-link' : ''}" data-id="${p.id}">
       <div class="card-photo">&#127968;</div>
-      <div class="title">${escapeHtml(p.address)} ${ownerTag} ${staleTag}</div>
+      <div class="title">${escapeHtml(p.address)} ${ownerTag} ${staleTag} ${dealioStageTag}</div>
       ${agentHtml}
       ${valueMeta}
       ${checkboxes}
@@ -616,7 +620,7 @@ function renderPropertiesSection() {
   const tbody = document.querySelector('#properties-table tbody');
   tbody.innerHTML = items.length ? items.map(p => `<tr data-id="${p.id}">
       <td><a href="#" class="property-link" data-id="${p.id}">${escapeHtml(p.address)}</a>${state.staleIds.has(String(p.id)) ? ' <span class="tag stale">Stale</span>' : ''}</td>
-      <td>${escapeHtml(p.stage)}</td>
+      <td>${escapeHtml(p.stage)}${p.dealio_stage ? `<div class="meta">${escapeHtml(p.dealio_stage)}</div>` : ''}</td>
       <td>${p.deal_value ? fmtMoney(p.deal_value) : '<span class="muted">—</span>'}</td>
       <td>${p.assigned_to_me ? '<span class="tag mine">Mine</span>' : '<span class="tag not-mine">Not yours</span>'}</td>
       <td>${escapeHtml(p.agent_name || '')}</td>
