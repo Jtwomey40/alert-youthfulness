@@ -92,6 +92,9 @@ function postJSON(url, body) {
 function patchJSON(url, body) {
   return apiFetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 }
+function deleteJSON(url) {
+  return apiFetch(url, { method: 'DELETE' });
+}
 
 // ---- Error banner ----
 function showError(msg) {
@@ -202,26 +205,30 @@ function renderActivityList(container, items, limit) {
 }
 
 // ---- Shared property card template ----
-// Properties in the "Offers ready" stage get two checkboxes:
+// Properties in the "Offers ready" stage get two stage-specific checkboxes:
 //   - "I've called them" stamps called_at and the card drops out of the Offers ready
 //     board column right away (see renderOverview / renderPropertiesSection filters).
-//   - "Not enough equity" permanently deletes the property after a confirm prompt.
+//   - "Not enough equity" archives the property after a confirm prompt.
+// Every other stage gets a generic "Done — archive" checkbox that does the same archive
+// action, so any property can be checked off from its card regardless of stage.
 function propertyCardHtml(p, opts) {
   opts = opts || {};
   const linkable = opts.linkable !== false;
   const showOfferCheckboxes = p.stage === 'Offers ready';
-  const checkboxes = showOfferCheckboxes
-    ? `<div class="card-checkboxes">
-        <label class="called-checkbox-label">
-          <input type="checkbox" class="called-checkbox" data-id="${p.id}" ${p.called_at ? 'checked' : ''}>
-          I've called them
-        </label>
-        <label class="equity-checkbox-label">
-          <input type="checkbox" class="equity-checkbox" data-id="${p.id}">
-          Not enough equity
-        </label>
-      </div>`
-    : '';
+  const innerCheckboxes = showOfferCheckboxes
+    ? `<label class="called-checkbox-label">
+        <input type="checkbox" class="called-checkbox" data-id="${p.id}" ${p.called_at ? 'checked' : ''}>
+        I've called them
+      </label>
+      <label class="equity-checkbox-label">
+        <input type="checkbox" class="equity-checkbox" data-id="${p.id}">
+        Not enough equity
+      </label>`
+    : `<label class="archive-checkbox-label">
+        <input type="checkbox" class="archive-checkbox" data-id="${p.id}">
+        Done &mdash; archive
+      </label>`;
+  const checkboxes = `<div class="card-checkboxes">${innerCheckboxes}</div>`;
   const ownerTag = p.assigned_to_me
     ? ''
     : '<span class="tag not-mine">Not yours</span>';
@@ -260,10 +267,12 @@ async function toggleCalledAt(id, checked) {
   }
 }
 
-// "Not enough equity" — archives the property (soft-delete) rather than destroying it,
-// so it can be restored later from the Archived Properties list. Confirms first; re-renders
-// either way so the checkbox doesn't stay visually checked.
-async function handleNotEnoughEquity(id) {
+// Archives a property (soft-delete) rather than destroying it, so it can be restored
+// later from the Archived Properties list — or permanently deleted from there.
+// Used by both the "Not enough equity" checkbox (Offers ready) and the generic
+// "Done — archive" checkbox shown on every other stage's card. Confirms first;
+// re-renders either way so the checkbox doesn't stay visually checked.
+async function archivePropertyWithConfirm(id) {
   if (!window.confirm('Archive this property? It will be hidden from the dashboard but can be restored later from Archived Properties.')) {
     renderOverview();
     renderPipeline();
@@ -294,7 +303,10 @@ async function loadArchivedProperties() {
         <td>${escapeHtml(p.address)}</td>
         <td>${escapeHtml(p.stage)}</td>
         <td>${escapeHtml(p.agent_name || '')}</td>
-        <td><button type="button" class="secondary-btn small restore-property-btn" data-id="${p.id}">Restore</button></td>
+        <td>
+          <button type="button" class="secondary-btn small restore-property-btn" data-id="${p.id}">Restore</button>
+          <button type="button" class="danger-btn small delete-property-btn" data-id="${p.id}">Delete Forever</button>
+        </td>
       </tr>`).join('') : `<tr><td colspan="4" class="muted">No archived properties.</td></tr>`;
   } catch (err) {
     tbody.innerHTML = `<tr><td colspan="4" class="muted">Could not load archived properties.</td></tr>`;
@@ -308,6 +320,21 @@ async function restoreProperty(id) {
     await loadArchivedProperties();
     await loadAll();
   } catch (err) { showError('Could not restore property: ' + err.message); }
+}
+
+// Permanently deletes an already-archived property (DELETE /api/properties/:id cascades
+// its call recaps, stage history and edit history; any linked tasks keep their row with
+// property_id cleared). Irreversible, so this confirms with the address before calling it.
+async function deletePropertyForever(id) {
+  const prop = state.archivedProperties.find(p => String(p.id) === String(id));
+  const label = prop ? prop.address : 'this property';
+  if (!window.confirm(`Permanently delete "${label}"? This cannot be undone — its call recaps and history will be deleted too.`)) return;
+  try {
+    await deleteJSON(`/api/properties/${id}`);
+    await loadArchivedProperties();
+  } catch (err) {
+    showError('Could not permanently delete property: ' + err.message);
+  }
 }
 
 // ---- Overview ----
@@ -595,7 +622,8 @@ function renderPropertiesSection() {
       <td>${escapeHtml(p.agent_name || '')}</td>
       <td>${p.last_recap_date ? fmtDate(p.last_recap_date) : '<span class="muted">none</span>'}</td>
       <td>${p.deal_url ? `<a href="${escapeHtml(p.deal_url)}" target="_blank" rel="noopener">Open</a>` : ''}</td>
-    </tr>`).join('') : `<tr><td colspan="7" class="muted">No properties match.</td></tr>`;
+      <td><button type="button" class="secondary-btn small archive-property-btn" data-id="${p.id}">Archive</button></td>
+    </tr>`).join('') : `<tr><td colspan="8" class="muted">No properties match.</td></tr>`;
 
   const boardItems = items.filter(p => !(p.stage === 'Offers ready' && p.called_at));
   renderBoard(
@@ -710,9 +738,10 @@ document.getElementById('view-archived-btn').addEventListener('click', () => {
   loadArchivedProperties();
 });
 document.querySelector('#archived-properties-table tbody').addEventListener('click', (e) => {
-  const btn = e.target.closest('.restore-property-btn');
-  if (!btn) return;
-  restoreProperty(btn.dataset.id);
+  const restoreBtn = e.target.closest('.restore-property-btn');
+  if (restoreBtn) { restoreProperty(restoreBtn.dataset.id); return; }
+  const deleteBtn = e.target.closest('.delete-property-btn');
+  if (deleteBtn) { deletePropertyForever(deleteBtn.dataset.id); return; }
 });
 
 // ---- Add Property modal ----
@@ -850,6 +879,8 @@ document.getElementById('property-detail-form').addEventListener('submit', async
 });
 
 document.querySelector('#properties-table tbody').addEventListener('click', (e) => {
+  const archiveBtn = e.target.closest('.archive-property-btn');
+  if (archiveBtn) { archivePropertyWithConfirm(archiveBtn.dataset.id); return; }
   const link = e.target.closest('.property-link');
   if (!link) return;
   e.preventDefault();
@@ -862,13 +893,15 @@ document.getElementById('properties-board-view').addEventListener('click', (e) =
   openPropertyDetail(card.dataset.id);
 });
 
-// ---- Offers ready card checkboxes ("I've called them" / "Not enough equity") ----
+// ---- Property card checkboxes ("I've called them" / "Not enough equity" / generic "Done — archive") ----
 function handleCalledCheckboxChange(e) {
   const el = e.target;
   if (el.matches('.called-checkbox')) {
     toggleCalledAt(el.dataset.id, el.checked);
   } else if (el.matches('.equity-checkbox') && el.checked) {
-    handleNotEnoughEquity(el.dataset.id);
+    archivePropertyWithConfirm(el.dataset.id);
+  } else if (el.matches('.archive-checkbox') && el.checked) {
+    archivePropertyWithConfirm(el.dataset.id);
   }
 }
 document.getElementById('pipeline-board').addEventListener('change', handleCalledCheckboxChange);

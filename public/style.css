@@ -457,7 +457,8 @@ td input.inline-edit:focus {
 }
 
 .called-checkbox-label,
-.equity-checkbox-label {
+.equity-checkbox-label,
+.archive-checkbox-label {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -468,14 +469,17 @@ td input.inline-edit:focus {
 }
 .called-checkbox-label:hover { color: var(--magenta); }
 .equity-checkbox-label:hover { color: var(--amber); }
+.archive-checkbox-label:hover { color: var(--amber); }
 .called-checkbox-label input[type="checkbox"],
-.equity-checkbox-label input[type="checkbox"] {
+.equity-checkbox-label input[type="checkbox"],
+.archive-checkbox-label input[type="checkbox"] {
   width: 15px;
   height: 15px;
   cursor: pointer;
   accent-color: var(--magenta);
 }
 .equity-checkbox-label input[type="checkbox"] { accent-color: var(--amber); }
+.archive-checkbox-label input[type="checkbox"] { accent-color: var(--amber); }
 
 .view-toggle { display: flex; gap: 8px; margin-bottom: 14px; }
 .view-toggle button {
@@ -555,6 +559,19 @@ a.property-link:hover { text-decoration: underline; }
 }
 .secondary-btn:hover { border-color: var(--magenta); color: var(--magenta); }
 .secondary-btn.small, .primary-btn.small { padding: 5px 10px; font-size: 12px; }
+
+.danger-btn {
+  background: #fff;
+  color: #c0392b;
+  border: 1px solid #e8b4ad;
+  border-radius: 8px;
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.danger-btn:hover { background: #c0392b; border-color: #c0392b; color: #fff; }
+.danger-btn.small { padding: 5px 10px; font-size: 12px; margin-left: 6px; }
 
 /* ---- Bulk bar ---- */
 .bulk-bar {
