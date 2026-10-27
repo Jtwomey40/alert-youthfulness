@@ -311,9 +311,16 @@ main { padding: 24px 28px; }
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   margin-bottom: 10px;
 }
-.column-header h3 { margin: 0; }
+.column-header-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.column-header h3 { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .column-add-btn {
   border: none;
   background: #fff;
@@ -327,6 +334,19 @@ main { padding: 24px 28px; }
   flex: none;
 }
 .column-add-btn:hover { color: var(--magenta); }
+.column-collapse-btn {
+  border: none;
+  background: none;
+  color: var(--gray);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px;
+  flex: none;
+}
+.column-collapse-btn:hover { color: var(--magenta); }
+.column.collapsed { padding-bottom: 12px; }
+.column.collapsed .column-header { margin-bottom: 0; }
 
 .pipeline-board .column.stage-intake { background: #eff6ff; }
 .pipeline-board .column.stage-intake h3 { color: #2563eb; }

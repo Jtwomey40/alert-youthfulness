@@ -25,9 +25,11 @@ const state = {
   propertiesSearch: '',
   propertiesFilterStage: '',
   agentsSearch: '',
+  pipelineSearch: '',
   attentionTab: 'stale_recaps',
   ownershipScope: 'mine', // 'mine' | 'everyone' — filters out properties not assigned_to_me
   selectedTaskIds: new Set(),
+  collapsedStages: loadCollapsedStages(), // Set of pipeline stage names currently collapsed, persisted locally
   autoRefreshTimer: null,
   recapMatchIds: null, // null = no active recap search; otherwise a Set of property ids matching the current recap search
   recapSearchTimer: null,
@@ -56,6 +58,15 @@ function debounce(fn, ms) {
 }
 function stageSlug(stage) {
   return 'stage-' + String(stage || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+function loadCollapsedStages() {
+  try {
+    const raw = localStorage.getItem('pipelineCollapsedStages');
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch (e) { return new Set(); }
+}
+function saveCollapsedStages() {
+  try { localStorage.setItem('pipelineCollapsedStages', JSON.stringify([...state.collapsedStages])); } catch (e) { /* ignore */ }
 }
 function agentInitials(name) {
   if (!name) return '';
@@ -150,10 +161,17 @@ function renderBoard(container, items, groupKeyFn, groupOrder, groupLabelFn, car
   container.innerHTML = groupOrder.map(key => {
     const groupItems = items.filter(i => groupKeyFn(i) === key);
     const extraClass = opts.columnClass ? ' ' + opts.columnClass(key) : '';
+    const collapsed = !!(opts.collapsible && opts.collapsedKeys && opts.collapsedKeys.has(key));
+    const collapseBtn = opts.collapsible
+      ? `<button type="button" class="column-collapse-btn" data-collapse-stage="${escapeHtml(key)}" title="${collapsed ? 'Expand' : 'Collapse'} column">${collapsed ? '&#9656;' : '&#9662;'}</button>`
+      : '';
     const addBtn = opts.addButton ? `<button type="button" class="column-add-btn" data-add-stage="${escapeHtml(key)}" title="Add property">+</button>` : '';
-    return `<div class="column${extraClass}">
-      <div class="column-header"><h3>${escapeHtml(groupLabelFn(key))} (${groupItems.length})</h3>${addBtn}</div>
-      ${groupItems.map(cardHtmlFn).join('')}
+    return `<div class="column${extraClass}${collapsed ? ' collapsed' : ''}">
+      <div class="column-header">
+        <div class="column-header-title">${collapseBtn}<h3>${escapeHtml(groupLabelFn(key))} (${groupItems.length})</h3></div>
+        ${addBtn}
+      </div>
+      ${collapsed ? '' : groupItems.map(cardHtmlFn).join('')}
     </div>`;
   }).join('');
 }
@@ -469,10 +487,12 @@ function renderOverview() {
 
 // ---- Pipeline (its own page) ----
 function renderPipeline() {
+  const q = state.pipelineSearch.trim().toLowerCase();
   const active = state.properties.filter(p =>
     p.stage !== 'Not in DealioDesk' &&
     !(p.stage === 'Offers ready' && p.called_at) &&
-    (state.ownershipScope !== 'mine' || p.assigned_to_me)
+    (state.ownershipScope !== 'mine' || p.assigned_to_me) &&
+    (!q || (p.address || '').toLowerCase().includes(q) || (p.agent_name || '').toLowerCase().includes(q))
   );
   renderBoard(
     document.getElementById('pipeline-board'),
@@ -481,7 +501,7 @@ function renderPipeline() {
     STAGE_ORDER.filter(s => s !== 'Not in DealioDesk'),
     s => s,
     p => propertyCardHtml(p, { linkable: false }),
-    { columnClass: stageSlug, addButton: true }
+    { columnClass: stageSlug, addButton: true, collapsible: true, collapsedKeys: state.collapsedStages }
   );
 }
 
@@ -981,6 +1001,11 @@ document.querySelectorAll('#tasks-table th[data-sort]').forEach(th => {
   });
 });
 
+document.getElementById('pipeline-search').addEventListener('input', (e) => {
+  state.pipelineSearch = e.target.value;
+  renderPipeline();
+});
+
 document.getElementById('properties-search').addEventListener('input', (e) => {
   state.propertiesSearch = e.target.value;
   const q = state.propertiesSearch.trim().toLowerCase();
@@ -1001,14 +1026,17 @@ document.getElementById('global-search').addEventListener('input', (e) => {
   state.tasksSearch = q;
   state.propertiesSearch = q;
   state.agentsSearch = q;
+  state.pipelineSearch = q;
   document.getElementById('tasks-search').value = q;
   document.getElementById('properties-search').value = q;
   document.getElementById('agents-search').value = q;
+  document.getElementById('pipeline-search').value = q;
   const qLower = q.trim().toLowerCase();
   if (!qLower) state.recapMatchIds = null;
   renderTasksSection();
   renderPropertiesSection();
   renderAgents();
+  renderPipeline();
   fetchRecapMatches(qLower);
 });
 
@@ -1026,8 +1054,17 @@ document.getElementById('overview-attention-content').addEventListener('click', 
   openPropertyDetail(row.dataset.propertyId);
 });
 
-// ---- Pipeline: column "+" add-property buttons ----
+// ---- Pipeline: column "+" add-property buttons, and collapse/expand toggles ----
 document.getElementById('pipeline-board').addEventListener('click', (e) => {
+  const collapseBtn = e.target.closest('.column-collapse-btn');
+  if (collapseBtn) {
+    const stage = collapseBtn.dataset.collapseStage;
+    if (state.collapsedStages.has(stage)) state.collapsedStages.delete(stage);
+    else state.collapsedStages.add(stage);
+    saveCollapsedStages();
+    renderPipeline();
+    return;
+  }
   const btn = e.target.closest('.column-add-btn');
   if (!btn) return;
   document.getElementById('property-form').reset();
