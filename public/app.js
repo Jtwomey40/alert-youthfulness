@@ -171,7 +171,7 @@ function renderBoard(container, items, groupKeyFn, groupOrder, groupLabelFn, car
         <div class="column-header-title">${collapseBtn}<h3>${escapeHtml(groupLabelFn(key))} (${groupItems.length})</h3></div>
         ${addBtn}
       </div>
-      ${collapsed ? '' : groupItems.map(cardHtmlFn).join('')}
+      ${collapsed ? '' : `<div class="column-cards">${groupItems.map(cardHtmlFn).join('')}</div>`}
     </div>`;
   }).join('');
 }

@@ -460,9 +460,15 @@ td input.inline-edit:focus {
 .tag.todo { background: #f3f4f6; color: var(--black); }
 .tag.in_progress { background: #fde0ea; color: var(--magenta); }
 
-.board { display: flex; gap: 16px; overflow-x: auto; }
+.board { display: flex; align-items: flex-start; gap: 16px; overflow-x: auto; }
 .column { flex: 0 0 260px; background: #fafafa; border-radius: 10px; padding: 12px; }
 .column h3 { font-size: 13px; color: var(--gray); margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 0.03em; }
+.column-cards {
+  max-height: calc(100vh - 280px);
+  overflow-y: auto;
+  padding-right: 4px;
+  margin-right: -4px;
+}
 .card { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 8px; font-size: 13px; cursor: default; }
 .card.property-link { cursor: pointer; }
 .card.property-link:hover { border-color: var(--magenta); }
