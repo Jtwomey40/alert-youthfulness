@@ -178,16 +178,40 @@ router.post('/bulk-sync', asyncHandler(async (req, res) => {
 }));
 
 // Fields whose changes get written to property_edits as an audit trail. Stage is tracked
-// separately in stage_history, and called_at/archived_at are lifecycle toggles rather than
-// "edits" in the sense Jeremy cares about, so none of those three are duplicated here.
+// separately in stage_history, and called_at/left_vm_at/archived_at are lifecycle toggles
+// rather than "edits" in the sense Jeremy cares about, so none of those are duplicated here.
 const AUDITED_FIELDS = ['address', 'deal_url', 'agent_name', 'agent_phone', 'agent_email', 'legacy_key', 'deal_value', 'assigned_to_me'];
+
+// Text dropped into DealioDesk's notes feed for each dashboard checkbox that queues a note.
+// Keyed by the `dealio_note_reason` the frontend sends alongside a PATCH — see enqueueDealioNote.
+const DEALIO_NOTE_TEXT = {
+  called: 'Called \u2014 marked via Jeremy\u2019s dashboard.',
+  left_vm: 'Left a voicemail \u2014 marked via Jeremy\u2019s dashboard.',
+  not_enough_equity: 'Not enough equity \u2014 archived via Jeremy\u2019s dashboard.'
+};
+
+// Drops a row in dealio_note_queue for a property that has a dealio_deal_id, so it can later
+// be written into DealioDesk's actual notes feed (this app has no live DealioDesk API access
+// of its own — see the comment on dealio_note_queue in db/schema.sql). No-ops silently for an
+// unrecognized reason or a property with no dealio_deal_id (nothing to attach a note to).
+async function enqueueDealioNote(property, reason) {
+  const text = DEALIO_NOTE_TEXT[reason];
+  if (!text || !property.dealio_deal_id) return;
+  await pool.query(
+    `INSERT INTO dealio_note_queue (property_id, dealio_deal_id, address, reason, note_text)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [property.id, property.dealio_deal_id, property.address, reason, text]
+  );
+}
 
 // PATCH /api/properties/:id — partial update (never overwrites with null unless explicitly passed).
 // If `stage` is changing, logs the transition to stage_history for the activity feed / insights.
 // Any change to an AUDITED_FIELDS field is logged to property_edits for the edit-history view.
+// An optional, non-persisted `dealio_note_reason` ('called' | 'left_vm' | 'not_enough_equity')
+// queues a DealioDesk note for this property — see enqueueDealioNote.
 router.patch('/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const fields = ['address', 'stage', 'deal_url', 'agent_name', 'agent_phone', 'agent_email', 'legacy_key', 'deal_value', 'called_at', 'assigned_to_me', 'archived_at', 'dealio_stage', 'dealio_deal_id', 'dealio_property_id', 'dealio_synced_at'];
+  const fields = ['address', 'stage', 'deal_url', 'agent_name', 'agent_phone', 'agent_email', 'legacy_key', 'deal_value', 'called_at', 'left_vm_at', 'assigned_to_me', 'archived_at', 'dealio_stage', 'dealio_deal_id', 'dealio_property_id', 'dealio_synced_at'];
   const sets = [];
   const values = [];
   for (const f of fields) {
@@ -203,11 +227,15 @@ router.patch('/:id', asyncHandler(async (req, res) => {
   const before = current.rows[0];
   const previousStage = before.stage;
 
-  // Changing stage resets the "called them" checkbox, unless this same request
-  // is explicitly setting called_at itself.
+  // Changing stage resets the "called them" / "left VM" checkboxes, unless this same request
+  // is explicitly setting that field itself.
   if (req.body.stage !== undefined && req.body.called_at === undefined && req.body.stage !== previousStage) {
     values.push(null);
     sets.push(`called_at = $${values.length}`);
+  }
+  if (req.body.stage !== undefined && req.body.left_vm_at === undefined && req.body.stage !== previousStage) {
+    values.push(null);
+    sets.push(`left_vm_at = $${values.length}`);
   }
 
   values.push(id);
@@ -235,6 +263,10 @@ router.patch('/:id', asyncHandler(async (req, res) => {
         [id, f, oldVal == null ? null : String(oldVal), newVal == null ? null : String(newVal)]
       );
     }
+  }
+
+  if (req.body.dealio_note_reason) {
+    await enqueueDealioNote(rows[0], req.body.dealio_note_reason);
   }
 
   res.json(rows[0]);

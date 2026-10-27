@@ -165,3 +165,27 @@ CREATE INDEX IF NOT EXISTS idx_properties_dealio_deal_id ON properties(dealio_de
 -- When the full-pipeline sync last touched this property, so the sync's own reconcile step
 -- (and the dashboard, if useful later) can tell freshly-synced rows from stale/manual ones.
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS dealio_synced_at TIMESTAMPTZ;
+
+-- Timestamp for the "Left VM" checkbox on a property's card, mirroring called_at. Also shown
+-- only in the 'Offers ready' stage, and reset to NULL on stage change (see PATCH /api/properties/:id).
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS left_vm_at TIMESTAMPTZ;
+
+-- Queue of notes waiting to be written into DealioDesk's deal notes feed. This app has no
+-- direct DealioDesk API credentials of its own, so checking "I've called them" / "Left VM" /
+-- "Not enough equity" doesn't call DealioDesk live — it drops a row here instead. Jeremy (via
+-- Claude, through the DealioDesk connector) periodically flushes unsynced rows by calling
+-- DealioDesk's TransactionNotes.Create for each dealio_deal_id, then marks them synced via
+-- POST /api/dealio-notes/mark-synced. Snapshots dealio_deal_id/address at queue time so a
+-- flush still works even if the property is later archived or edited.
+CREATE TABLE IF NOT EXISTS dealio_note_queue (
+  id              SERIAL PRIMARY KEY,
+  property_id     INTEGER REFERENCES properties(id) ON DELETE SET NULL,
+  dealio_deal_id  TEXT NOT NULL,
+  address         TEXT NOT NULL,
+  reason          TEXT NOT NULL CHECK (reason IN ('called','left_vm','not_enough_equity')),
+  note_text       TEXT NOT NULL,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  synced_at       TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_dealio_note_queue_unsynced ON dealio_note_queue(synced_at) WHERE synced_at IS NULL;

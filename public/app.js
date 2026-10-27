@@ -240,6 +240,10 @@ function propertyCardHtml(p, opts) {
         <input type="checkbox" class="called-checkbox" data-id="${p.id}" ${p.called_at ? 'checked' : ''}>
         I've called them
       </label>
+      <label class="left-vm-checkbox-label">
+        <input type="checkbox" class="left-vm-checkbox" data-id="${p.id}" ${p.left_vm_at ? 'checked' : ''}>
+        Left VM
+      </label>
       <label class="equity-checkbox-label">
         <input type="checkbox" class="equity-checkbox" data-id="${p.id}">
         Not enough equity
@@ -267,33 +271,41 @@ function propertyCardHtml(p, opts) {
     </div>`;
 }
 
-// Optimistically hides the card and persists the "called" timestamp; reverts and
-// shows an error if the save fails.
-async function toggleCalledAt(id, checked) {
+// Optimistically updates the card and persists a boolean-timestamp field ("called_at" or
+// "left_vm_at"); reverts and shows an error if the save fails. Checking the box (not
+// unchecking) also asks the server to queue a DealioDesk note for `dealioReason`, which lands
+// in DealioDesk's notes feed next time the queue is flushed (see dealio_note_queue).
+async function toggleTimestampField(id, field, checked, dealioReason) {
   const idx = state.properties.findIndex(p => String(p.id) === String(id));
-  const previous = idx !== -1 ? state.properties[idx].called_at : undefined;
-  if (idx !== -1) state.properties[idx].called_at = checked ? new Date().toISOString() : null;
+  const previous = idx !== -1 ? state.properties[idx][field] : undefined;
+  const value = checked ? new Date().toISOString() : null;
+  if (idx !== -1) state.properties[idx][field] = value;
   renderOverview();
   renderPipeline();
   renderPropertiesSection();
   try {
-    const updated = await patchJSON(`/api/properties/${id}`, { called_at: checked ? new Date().toISOString() : null });
+    const body = { [field]: value };
+    if (checked && dealioReason) body.dealio_note_reason = dealioReason;
+    const updated = await patchJSON(`/api/properties/${id}`, body);
     if (idx !== -1) state.properties[idx] = updated;
   } catch (err) {
-    if (idx !== -1) state.properties[idx].called_at = previous;
+    if (idx !== -1) state.properties[idx][field] = previous;
     showError('Could not save that: ' + err.message);
     renderOverview();
     renderPipeline();
     renderPropertiesSection();
   }
 }
+const toggleCalledAt = (id, checked) => toggleTimestampField(id, 'called_at', checked, 'called');
+const toggleLeftVm = (id, checked) => toggleTimestampField(id, 'left_vm_at', checked, 'left_vm');
 
 // Archives a property (soft-delete) rather than destroying it, so it can be restored
 // later from the Archived Properties list — or permanently deleted from there.
 // Used by both the "Not enough equity" checkbox (Offers ready) and the generic
 // "Done — archive" checkbox shown on every other stage's card. Confirms first;
-// re-renders either way so the checkbox doesn't stay visually checked.
-async function archivePropertyWithConfirm(id) {
+// re-renders either way so the checkbox doesn't stay visually checked. When `dealioReason`
+// is passed (the equity checkbox sends 'not_enough_equity'), also queues a DealioDesk note.
+async function archivePropertyWithConfirm(id, dealioReason) {
   if (!window.confirm('Archive this property? It will be hidden from the dashboard but can be restored later from Archived Properties.')) {
     renderOverview();
     renderPipeline();
@@ -305,7 +317,9 @@ async function archivePropertyWithConfirm(id) {
   if (idx !== -1) state.properties.splice(idx, 1);
   renderAll();
   try {
-    await patchJSON(`/api/properties/${id}`, { archived_at: new Date().toISOString() });
+    const body = { archived_at: new Date().toISOString() };
+    if (dealioReason) body.dealio_note_reason = dealioReason;
+    await patchJSON(`/api/properties/${id}`, body);
   } catch (err) {
     if (removed) state.properties.splice(idx, 0, removed);
     showError('Could not archive property: ' + err.message);
@@ -916,13 +930,15 @@ document.getElementById('properties-board-view').addEventListener('click', (e) =
   openPropertyDetail(card.dataset.id);
 });
 
-// ---- Property card checkboxes ("I've called them" / "Not enough equity" / generic "Done — archive") ----
+// ---- Property card checkboxes ("I've called them" / "Left VM" / "Not enough equity" / generic "Done — archive") ----
 function handleCalledCheckboxChange(e) {
   const el = e.target;
   if (el.matches('.called-checkbox')) {
     toggleCalledAt(el.dataset.id, el.checked);
+  } else if (el.matches('.left-vm-checkbox')) {
+    toggleLeftVm(el.dataset.id, el.checked);
   } else if (el.matches('.equity-checkbox') && el.checked) {
-    archivePropertyWithConfirm(el.dataset.id);
+    archivePropertyWithConfirm(el.dataset.id, 'not_enough_equity');
   } else if (el.matches('.archive-checkbox') && el.checked) {
     archivePropertyWithConfirm(el.dataset.id);
   }

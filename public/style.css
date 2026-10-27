@@ -485,6 +485,7 @@ td input.inline-edit:focus {
 }
 
 .called-checkbox-label,
+.left-vm-checkbox-label,
 .equity-checkbox-label,
 .archive-checkbox-label {
   display: flex;
@@ -496,9 +497,11 @@ td input.inline-edit:focus {
   cursor: pointer;
 }
 .called-checkbox-label:hover { color: var(--magenta); }
+.left-vm-checkbox-label:hover { color: #2563eb; }
 .equity-checkbox-label:hover { color: var(--amber); }
 .archive-checkbox-label:hover { color: var(--amber); }
 .called-checkbox-label input[type="checkbox"],
+.left-vm-checkbox-label input[type="checkbox"],
 .equity-checkbox-label input[type="checkbox"],
 .archive-checkbox-label input[type="checkbox"] {
   width: 15px;
@@ -506,6 +509,7 @@ td input.inline-edit:focus {
   cursor: pointer;
   accent-color: var(--magenta);
 }
+.left-vm-checkbox-label input[type="checkbox"] { accent-color: #2563eb; }
 .equity-checkbox-label input[type="checkbox"] { accent-color: var(--amber); }
 .archive-checkbox-label input[type="checkbox"] { accent-color: var(--amber); }
 
