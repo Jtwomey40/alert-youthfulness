@@ -338,16 +338,6 @@ main { padding: 24px 28px; }
 .pipeline-board .column.stage-offers-ready h3 { color: var(--green); }
 .pipeline-board .column.stage-offer-selected { background: #fde0ea; }
 .pipeline-board .column.stage-offer-selected h3 { color: var(--magenta); }
-.pipeline-board .column.stage-under-contract { background: #fffbeb; }
-.pipeline-board .column.stage-under-contract h3 { color: var(--amber); }
-.pipeline-board .column.stage-closing { background: #fff7ed; }
-.pipeline-board .column.stage-closing h3 { color: #c2410c; }
-.pipeline-board .column.stage-renovation { background: #fefce8; }
-.pipeline-board .column.stage-renovation h3 { color: #a16207; }
-.pipeline-board .column.stage-resale { background: #f0fdfa; }
-.pipeline-board .column.stage-resale h3 { color: #0f766e; }
-.pipeline-board .column.stage-disposition { background: #f1f5f9; }
-.pipeline-board .column.stage-disposition h3 { color: #475569; }
 .pipeline-board .column.stage-not-in-dealiodesk { background: #fafafa; }
 .pipeline-board .column.stage-not-in-dealiodesk h3 { color: var(--gray); }
 

@@ -122,10 +122,12 @@ CREATE TABLE IF NOT EXISTS property_edits (
 
 CREATE INDEX IF NOT EXISTS idx_property_edits_property ON property_edits(property_id);
 
--- Expand properties.stage from the original 5 hand-picked values to DealioDesk's full
--- coarse stage list, so the full-pipeline sync (dealiodesk-full-pipeline-sync) can store
--- every one of Jeremy's real deals in its real stage instead of dropping/misfiling
--- anything outside the original Intake/Offer requested/Offers ready/Offer selected set.
+-- Expand properties.stage from the original 4 hand-picked values to the 5 stages that make up
+-- Jeremy's DealioDesk "offers" lens pipeline (Intake through Offer selected), so the
+-- full-pipeline sync (dealiodesk-full-pipeline-sync) can store his ~422 offers-pipeline deals
+-- in their real stage. Scoped ONLY to the offers lens — intentionally does NOT include
+-- DealioDesk's acquisitions/inspection/title/renovations/resale/disposition lenses; those
+-- weren't part of what Jeremy asked to track here.
 -- Looks up the existing CHECK constraint by introspection so this is safe to re-run.
 DO $$
 DECLARE
@@ -141,8 +143,7 @@ BEGIN
   END LOOP;
 END $$;
 ALTER TABLE properties ADD CONSTRAINT properties_stage_check CHECK (stage IN (
-  'Intake','Estimates available','Offer requested','Offers ready','Offer selected',
-  'Under contract','Closing','Renovation','Resale','Disposition','Not in DealioDesk'
+  'Intake','Estimates available','Offer requested','Offers ready','Offer selected','Not in DealioDesk'
 ));
 
 -- DealioDesk's finer board lane within a coarse stage (e.g. "Details Shared", "Comping

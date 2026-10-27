@@ -1,8 +1,7 @@
 // ---- Constants ----
 const STATUS_LABELS = { todo: 'To do', in_progress: 'In progress', done: 'Done' };
 const STAGE_ORDER = [
-  'Intake', 'Estimates available', 'Offer requested', 'Offers ready', 'Offer selected',
-  'Under contract', 'Closing', 'Renovation', 'Resale', 'Disposition', 'Not in DealioDesk'
+  'Intake', 'Estimates available', 'Offer requested', 'Offers ready', 'Offer selected', 'Not in DealioDesk'
 ];
 const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 };
 const ATTENTION_TABS = [
