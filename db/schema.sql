@@ -189,3 +189,23 @@ CREATE TABLE IF NOT EXISTS dealio_note_queue (
 );
 
 CREATE INDEX IF NOT EXISTS idx_dealio_note_queue_unsynced ON dealio_note_queue(synced_at) WHERE synced_at IS NULL;
+
+-- Pending Slack messages / Zoom recaps attached to a property, surfaced on the dashboard's
+-- "Board" activity board (replaces the old stage-based Pipeline view, which was redundant
+-- with DealioDesk's own stage tracking). Each row is one actionable item; Jeremy marks it
+-- handled, snoozes it, or opens the source from the board. See routes/activity-items.js.
+CREATE TABLE IF NOT EXISTS activity_items (
+  id              SERIAL PRIMARY KEY,
+  property_id     INTEGER NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
+  source          TEXT NOT NULL CHECK (source IN ('slack','zoom')),
+  source_ref      TEXT,
+  summary         TEXT NOT NULL,
+  source_url      TEXT,
+  occurred_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  status          TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new','snoozed','handled')),
+  snoozed_until   TIMESTAMPTZ,
+  handled_at      TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_activity_items_status ON activity_items(status);
+CREATE INDEX IF NOT EXISTS idx_activity_items_property ON activity_items(property_id);

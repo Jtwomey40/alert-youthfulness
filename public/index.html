@@ -12,7 +12,7 @@
   <div class="sidebar-logo"><span class="logo-badge">Z</span> Zoodealio</div>
   <nav class="sidebar-nav">
     <button data-section="overview" class="active"><span class="nav-icon">&#8962;</span> Overview</button>
-    <button data-section="pipeline"><span class="nav-icon">&#128188;</span> Pipeline</button>
+    <button data-section="board"><span class="nav-icon">&#128188;</span> Board</button>
     <button data-section="tasks"><span class="nav-icon">&#9776;</span> Tasks <span class="nav-badge" id="nav-tasks-badge" style="display:none;"></span></button>
     <button data-section="properties"><span class="nav-icon">&#8962;</span> Properties</button>
     <button data-section="agents"><span class="nav-icon">&#128100;</span> Agents</button>
@@ -77,18 +77,13 @@
     </div>
   </section>
 
-  <section id="pipeline" class="section">
+  <section id="board" class="section">
     <div class="panel">
       <div class="toolbar">
-        <h2 style="margin:0;">Deal Pipeline</h2>
-        <input type="search" id="pipeline-search" placeholder="Search pipeline…">
-        <div class="spacer"></div>
-        <div class="scope-toggle" id="pipeline-scope-toggle">
-          <button data-scope="mine" class="active">Mine</button>
-          <button data-scope="everyone">Everyone</button>
-        </div>
+        <h2 style="margin:0;">Board</h2>
       </div>
-      <div class="board pipeline-board" id="pipeline-board"></div>
+      <p class="muted">Properties with a pending Slack message or Zoom recap.</p>
+      <div class="board" id="activity-board"></div>
     </div>
   </section>
 

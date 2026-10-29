@@ -11,6 +11,7 @@ app.use('/api/properties', require('./routes/properties'));
 app.use('/api/tasks', require('./routes/tasks'));
 app.use('/api/insights', require('./routes/insights'));
 app.use('/api/dealio-notes', require('./routes/dealio-notes'));
+app.use('/api/activity-items', require('./routes/activity-items'));
 
 app.get('/api/health', async (req, res) => {
   try {

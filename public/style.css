@@ -306,7 +306,6 @@ main { padding: 24px 28px; }
 .timeline-item.overdue .timeline-title { color: var(--magenta); }
 .timeline-empty { color: var(--gray); font-size: 13px; padding: 12px 0; }
 
-/* ---- Pipeline board: stage colors ---- */
 .column-header {
   display: flex;
   align-items: center;
@@ -347,19 +346,6 @@ main { padding: 24px 28px; }
 .column-collapse-btn:hover { color: var(--magenta); }
 .column.collapsed { padding-bottom: 12px; }
 .column.collapsed .column-header { margin-bottom: 0; }
-
-.pipeline-board .column.stage-intake { background: #eff6ff; }
-.pipeline-board .column.stage-intake h3 { color: #2563eb; }
-.pipeline-board .column.stage-estimates-available { background: #ecfeff; }
-.pipeline-board .column.stage-estimates-available h3 { color: #0e7490; }
-.pipeline-board .column.stage-offer-requested { background: #f5f3ff; }
-.pipeline-board .column.stage-offer-requested h3 { color: #7c3aed; }
-.pipeline-board .column.stage-offers-ready { background: #ecfdf3; }
-.pipeline-board .column.stage-offers-ready h3 { color: var(--green); }
-.pipeline-board .column.stage-offer-selected { background: #fde0ea; }
-.pipeline-board .column.stage-offer-selected h3 { color: var(--magenta); }
-.pipeline-board .column.stage-not-in-dealiodesk { background: #fafafa; }
-.pipeline-board .column.stage-not-in-dealiodesk h3 { color: var(--gray); }
 
 .card-photo {
   width: 100%;
@@ -539,6 +525,20 @@ td input.inline-edit:focus {
 .tag.mine { background: #ecfdf3; color: var(--green); }
 .tag.stale { background: #fff7ed; color: var(--amber); }
 .tag.dealio-stage { background: #ecfeff; color: #0e7490; }
+.tag.source-slack { background: var(--magenta-light); color: var(--magenta); }
+.tag.source-zoom { background: #fff7ed; color: var(--amber); }
+
+/* ---- Activity board (Board nav section) ---- */
+.card.handled { opacity: 0.6; }
+.activity-card-actions {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.activity-card-actions .icon-btn.small { padding: 4px 8px; font-size: 12px; }
 
 a { color: var(--magenta); }
 a.property-link { text-decoration: none; font-weight: 600; }

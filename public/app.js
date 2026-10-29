@@ -17,6 +17,7 @@ const state = {
   stats: null,
   attention: null,
   activity: [],
+  activityItems: [], // pending Slack/Zoom items for the Board (activity board) view
   tasksSort: { key: 'due', dir: 'asc' },
   propertiesSort: { key: 'address', dir: 'asc' },
   tasksSearch: '',
@@ -25,11 +26,9 @@ const state = {
   propertiesSearch: '',
   propertiesFilterStage: '',
   agentsSearch: '',
-  pipelineSearch: '',
   attentionTab: 'stale_recaps',
   ownershipScope: 'mine', // 'mine' | 'everyone' — filters out properties not assigned_to_me
   selectedTaskIds: new Set(),
-  collapsedStages: loadCollapsedStages(), // Set of pipeline stage names currently collapsed, persisted locally
   autoRefreshTimer: null,
   recapMatchIds: null, // null = no active recap search; otherwise a Set of property ids matching the current recap search
   recapSearchTimer: null,
@@ -58,15 +57,6 @@ function debounce(fn, ms) {
 }
 function stageSlug(stage) {
   return 'stage-' + String(stage || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-}
-function loadCollapsedStages() {
-  try {
-    const raw = localStorage.getItem('pipelineCollapsedStages');
-    return raw ? new Set(JSON.parse(raw)) : new Set();
-  } catch (e) { return new Set(); }
-}
-function saveCollapsedStages() {
-  try { localStorage.setItem('pipelineCollapsedStages', JSON.stringify([...state.collapsedStages])); } catch (e) { /* ignore */ }
 }
 function agentInitials(name) {
   if (!name) return '';
@@ -124,18 +114,20 @@ async function loadAll() {
   const hasData = state.tasks.length || state.properties.length;
   statusEl.textContent = hasData ? 'Refreshing…' : 'Loading…';
   try {
-    const [tasks, properties, stats, attention, activity] = await Promise.all([
+    const [tasks, properties, stats, attention, activity, activityItems] = await Promise.all([
       getJSON('/api/tasks'),
       getJSON('/api/properties'),
       getJSON('/api/insights/stats'),
       getJSON('/api/insights/needs-attention'),
-      getJSON('/api/insights/activity?limit=30')
+      getJSON('/api/insights/activity?limit=30'),
+      getJSON('/api/activity-items')
     ]);
     state.tasks = tasks;
     state.properties = properties;
     state.stats = stats;
     state.attention = attention;
     state.activity = activity;
+    state.activityItems = activityItems;
     state.staleIds = new Set((attention.stale_recaps || []).map(p => String(p.id)));
     hideError();
     renderAll();
@@ -148,7 +140,7 @@ async function loadAll() {
 
 function renderAll() {
   renderOverview();
-  renderPipeline();
+  renderActivityBoard();
   renderTasksSection();
   renderPropertiesSection();
   renderAgents();
@@ -281,7 +273,6 @@ async function toggleTimestampField(id, field, checked, dealioReason) {
   const value = checked ? new Date().toISOString() : null;
   if (idx !== -1) state.properties[idx][field] = value;
   renderOverview();
-  renderPipeline();
   renderPropertiesSection();
   try {
     const body = { [field]: value };
@@ -292,7 +283,6 @@ async function toggleTimestampField(id, field, checked, dealioReason) {
     if (idx !== -1) state.properties[idx][field] = previous;
     showError('Could not save that: ' + err.message);
     renderOverview();
-    renderPipeline();
     renderPropertiesSection();
   }
 }
@@ -308,7 +298,6 @@ const toggleLeftVm = (id, checked) => toggleTimestampField(id, 'left_vm_at', che
 async function archivePropertyWithConfirm(id, dealioReason) {
   if (!window.confirm('Archive this property? It will be hidden from the dashboard but can be restored later from Archived Properties.')) {
     renderOverview();
-    renderPipeline();
     renderPropertiesSection();
     return;
   }
@@ -499,24 +488,89 @@ function renderOverview() {
   renderActivityList(document.getElementById('overview-activity-list'), state.activity, 8);
 }
 
-// ---- Pipeline (its own page) ----
-function renderPipeline() {
-  const q = state.pipelineSearch.trim().toLowerCase();
-  const active = state.properties.filter(p =>
-    p.stage !== 'Not in DealioDesk' &&
-    !(p.stage === 'Offers ready' && p.called_at) &&
-    (state.ownershipScope !== 'mine' || p.assigned_to_me) &&
-    (!q || (p.address || '').toLowerCase().includes(q) || (p.agent_name || '').toLowerCase().includes(q))
-  );
-  renderBoard(
-    document.getElementById('pipeline-board'),
-    active,
-    p => p.stage,
-    STAGE_ORDER.filter(s => s !== 'Not in DealioDesk'),
-    s => s,
-    p => propertyCardHtml(p, { linkable: false }),
-    { columnClass: stageSlug, addButton: true, collapsible: true, collapsedKeys: state.collapsedStages }
-  );
+// ---- Board (activity board: one card per pending Slack message / Zoom recap) ----
+// Replaces the old stage-based Pipeline view, which duplicated DealioDesk's own stage
+// tracking. Properties with no pending activity items simply don't appear here.
+const ACTIVITY_COLUMNS = [
+  { key: 'new', label: 'New' },
+  { key: 'snoozed', label: 'Snoozed' },
+  { key: 'handled', label: 'Handled' }
+];
+
+function activityCardHtml(item) {
+  const sourceLabel = item.source === 'slack' ? 'Slack' : item.source === 'zoom' ? 'Zoom' : item.source;
+  const sourceTagClass = item.source === 'slack' ? 'source-slack' : item.source === 'zoom' ? 'source-zoom' : '';
+  const rawSummary = item.summary || '';
+  const truncatedSummary = rawSummary.length > 80 ? rawSummary.slice(0, 80) + '…' : rawSummary;
+  let timestampLabel;
+  if (item.status === 'handled') {
+    timestampLabel = item.handled_at ? `Handled ${fmtDateTime(item.handled_at)}` : 'Handled';
+  } else if (item.status === 'snoozed' && item.snoozed_until) {
+    timestampLabel = `Snoozed until ${fmtDateTime(item.snoozed_until)}`;
+  } else {
+    timestampLabel = fmtDateTime(item.occurred_at);
+  }
+  const stageTag = item.stage ? `<span class="tag dealio-stage">${escapeHtml(item.stage)}</span>` : '';
+  const actions = item.status !== 'handled'
+    ? `<div class="activity-card-actions">
+        <button type="button" class="icon-btn small activity-handle-btn" data-id="${item.id}">Mark handled</button>
+        <button type="button" class="icon-btn small activity-snooze-btn" data-id="${item.id}">Snooze</button>
+        ${item.source_url ? `<button type="button" class="icon-btn small activity-open-btn" data-url="${escapeHtml(item.source_url)}">Open</button>` : ''}
+      </div>`
+    : '';
+  return `<div class="card activity-card${item.status === 'handled' ? ' handled' : ''}" data-id="${item.id}">
+      <div class="title">${escapeHtml(item.address || '(unknown property)')} ${stageTag}</div>
+      <div class="meta"><span class="tag ${sourceTagClass}">${escapeHtml(sourceLabel)}</span> ${escapeHtml(truncatedSummary)}</div>
+      <div class="meta small">${timestampLabel}</div>
+      ${actions}
+    </div>`;
+}
+
+function renderActivityBoard() {
+  const container = document.getElementById('activity-board');
+  if (!container) return;
+  const items = state.activityItems || [];
+  container.innerHTML = ACTIVITY_COLUMNS.map(col => {
+    const colItems = items.filter(i => i.status === col.key);
+    return `<div class="column">
+        <div class="column-header">
+          <div class="column-header-title"><h3>${escapeHtml(col.label)} (${colItems.length})</h3></div>
+        </div>
+        <div class="column-cards">${colItems.length ? colItems.map(activityCardHtml).join('') : '<p class="muted small">Nothing here.</p>'}</div>
+      </div>`;
+  }).join('');
+}
+
+// Refetches just the activity items (cheaper than a full loadAll()) after a handle/snooze action.
+async function refreshActivityItems() {
+  try {
+    state.activityItems = await getJSON('/api/activity-items');
+    renderActivityBoard();
+  } catch (err) {
+    showError('Could not refresh the board: ' + err.message);
+  }
+}
+
+async function markActivityHandled(id) {
+  try {
+    await patchJSON(`/api/activity-items/${id}`, { action: 'handle' });
+    await refreshActivityItems();
+  } catch (err) { showError('Could not mark that handled: ' + err.message); }
+}
+
+// Fixed "snooze until tomorrow 9am local time" — no custom date picker for v1.
+function nextDay9amISO() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  d.setHours(9, 0, 0, 0);
+  return d.toISOString();
+}
+
+async function snoozeActivityItem(id) {
+  try {
+    await patchJSON(`/api/activity-items/${id}`, { action: 'snooze', snoozed_until: nextDay9amISO() });
+    await refreshActivityItems();
+  } catch (err) { showError('Could not snooze that: ' + err.message); }
 }
 
 // ---- Tasks ----
@@ -943,7 +997,6 @@ function handleCalledCheckboxChange(e) {
     archivePropertyWithConfirm(el.dataset.id);
   }
 }
-document.getElementById('pipeline-board').addEventListener('change', handleCalledCheckboxChange);
 document.getElementById('properties-board-view').addEventListener('change', handleCalledCheckboxChange);
 
 // ---- Tasks table: inline edit, select, calendar export ----
@@ -1017,11 +1070,6 @@ document.querySelectorAll('#tasks-table th[data-sort]').forEach(th => {
   });
 });
 
-document.getElementById('pipeline-search').addEventListener('input', (e) => {
-  state.pipelineSearch = e.target.value;
-  renderPipeline();
-});
-
 document.getElementById('properties-search').addEventListener('input', (e) => {
   state.propertiesSearch = e.target.value;
   const q = state.propertiesSearch.trim().toLowerCase();
@@ -1042,17 +1090,14 @@ document.getElementById('global-search').addEventListener('input', (e) => {
   state.tasksSearch = q;
   state.propertiesSearch = q;
   state.agentsSearch = q;
-  state.pipelineSearch = q;
   document.getElementById('tasks-search').value = q;
   document.getElementById('properties-search').value = q;
   document.getElementById('agents-search').value = q;
-  document.getElementById('pipeline-search').value = q;
   const qLower = q.trim().toLowerCase();
   if (!qLower) state.recapMatchIds = null;
   renderTasksSection();
   renderPropertiesSection();
   renderAgents();
-  renderPipeline();
   fetchRecapMatches(qLower);
 });
 
@@ -1070,23 +1115,14 @@ document.getElementById('overview-attention-content').addEventListener('click', 
   openPropertyDetail(row.dataset.propertyId);
 });
 
-// ---- Pipeline: column "+" add-property buttons, and collapse/expand toggles ----
-document.getElementById('pipeline-board').addEventListener('click', (e) => {
-  const collapseBtn = e.target.closest('.column-collapse-btn');
-  if (collapseBtn) {
-    const stage = collapseBtn.dataset.collapseStage;
-    if (state.collapsedStages.has(stage)) state.collapsedStages.delete(stage);
-    else state.collapsedStages.add(stage);
-    saveCollapsedStages();
-    renderPipeline();
-    return;
-  }
-  const btn = e.target.closest('.column-add-btn');
-  if (!btn) return;
-  document.getElementById('property-form').reset();
-  const stageField = document.querySelector('#property-form [name="stage"]');
-  if (stageField && btn.dataset.addStage) stageField.value = btn.dataset.addStage;
-  openModal('property-modal-overlay');
+// ---- Board: mark handled / snooze / open source for an activity item ----
+document.getElementById('activity-board').addEventListener('click', (e) => {
+  const handleBtn = e.target.closest('.activity-handle-btn');
+  if (handleBtn) { markActivityHandled(handleBtn.dataset.id); return; }
+  const snoozeBtn = e.target.closest('.activity-snooze-btn');
+  if (snoozeBtn) { snoozeActivityItem(snoozeBtn.dataset.id); return; }
+  const openBtn = e.target.closest('.activity-open-btn');
+  if (openBtn) { window.open(openBtn.dataset.url, '_blank'); return; }
 });
 
 // ---- "View All" / panel links that jump to another nav section ----
@@ -1143,7 +1179,6 @@ document.querySelectorAll('.scope-toggle').forEach(toggle => {
       b.classList.toggle('active', b.dataset.scope === state.ownershipScope);
     });
     renderOverview();
-    renderPipeline();
     renderPropertiesSection();
   });
 });
