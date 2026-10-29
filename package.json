@@ -4,7 +4,7 @@
   "description": "Zoodealio task + property dashboard, always-on replacement for the Notion-based system",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "npm run migrate && node server.js",
     "migrate": "node db/migrate.js"
   },
   "engines": {
